@@ -17,7 +17,8 @@
     "samples": "node scripts/make-dev-samples.mjs",
     "e2e:render": "node scripts/e2e-render.mjs",
     "e2e:editor": "node scripts/e2e-editor.mjs",
-    "e2e:avatar": "node scripts/e2e-avatar.mjs"
+    "e2e:avatar": "node scripts/e2e-avatar.mjs",
+    "e2e:avatar-library": "node scripts/e2e-avatar-library.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "1.2.2",

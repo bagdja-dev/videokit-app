@@ -20,6 +20,13 @@ export const TOOLS: readonly ToolInfo[] = [
     badge: 'Buka',
   },
   {
+    id: 'avatar-record',
+    name: 'Avatar Rekam',
+    description: 'Komentari video dengan avatar 3D yang mengikuti wajah & suaramu — untuk kreator faceless.',
+    href: '/avatar-record/',
+    badge: 'Baru',
+  },
+  {
     id: 'render-lab',
     name: 'Render Lab',
     description: 'Uji mesin render di browser memakai video contoh. Halaman internal tim.',
