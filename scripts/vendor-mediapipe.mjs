@@ -28,7 +28,7 @@ await fetchPinned(
   join(out, 'face_landmarker.task'),
   '64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff',
 );
-await fetchPinned(
+if (!process.env.VK_SKIP_DEV_SAMPLES) await fetchPinned(
   'https://raw.githubusercontent.com/vrm-c/vrm-specification/94e82dd346fa6cf0337c4421728640e5252dd38e/samples/Seed-san/vrm/Seed-san.vrm',
   'public/dev-samples/avatar/Seed-san.vrm',
   '624d0d554bc205bbdc33e22a68a2c3c20edebb3e573011ead8878a65e5329b23',
