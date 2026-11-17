@@ -1,0 +1,55 @@
+.page { max-width: 1280px; margin: 0 auto; padding: 16px 16px 48px; }
+.topbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; }
+.titleInput {
+  flex: 1 1 220px; min-width: 0; font: inherit; font-size: 20px; font-weight: 700; padding: 6px 10px;
+  border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--vk-text);
+}
+.titleInput:hover, .titleInput:focus { border-color: var(--vk-border); background: var(--vk-surface); outline: none; }
+.saveState { font-size: 13px; color: var(--vk-muted); }
+.layout { display: grid; gap: 16px; grid-template-columns: minmax(0, 1.25fr) minmax(320px, 1fr); align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+.side { display: grid; gap: 16px; }
+.h2 { margin: 0 0 12px; font-size: 16px; }
+.muted { color: var(--vk-muted); font-size: 13px; }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.field { display: grid; gap: 4px; font-size: 13px; color: var(--vk-muted); }
+.field input, .field select, .field textarea {
+  font: inherit; color: var(--vk-text); background: var(--vk-surface); border: 1px solid var(--vk-border);
+  border-radius: 6px; padding: 6px 8px; min-width: 0;
+}
+.field input[type='color'] { padding: 2px; height: 34px; width: 48px; }
+.grid2 { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid3 { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.warning { padding: 8px 10px; border-radius: 8px; background: var(--vk-primary-soft); font-size: 13px; }
+.error { color: var(--vk-danger); font-size: 13px; }
+
+/* Daftar cue */
+.cueList { display: grid; gap: 8px; max-height: calc(100vh - 160px); overflow: auto; padding-right: 4px; }
+.cue { border: 1px solid var(--vk-border); border-radius: 10px; padding: 10px; background: var(--vk-surface); cursor: pointer; }
+.cue:hover { border-color: var(--vk-primary); }
+.cueSelected { border-color: var(--vk-primary); box-shadow: 0 0 0 2px var(--vk-primary-soft); }
+.cueHead { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--vk-muted); margin-bottom: 4px; }
+.cueLines { display: grid; gap: 2px; font-size: 14px; }
+.cueLine2 { color: var(--vk-muted); font-style: italic; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chip { font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--vk-primary-soft); color: var(--vk-primary); }
+.chipMissing { background: transparent; border: 1px dashed var(--vk-border); color: var(--vk-muted); }
+
+/* Panel cue terpilih */
+.cueEditor { display: grid; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--vk-border); cursor: default; }
+.mediaRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
+.fileBtn { position: relative; overflow: hidden; }
+.fileBtn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* Pratinjau & render */
+.video { width: 100%; max-height: 60vh; border-radius: 8px; background: #000; }
+.progress { margin: 8px 0; }
+
+/* Daftar project */
+.projects { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.projectCard { display: grid; gap: 6px; cursor: pointer; text-align: left; font: inherit; color: inherit; }
+.projectCard:hover { border-color: var(--vk-primary); }
+.presets { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.preset { border: 1px solid var(--vk-border); border-radius: 10px; padding: 10px; background: var(--vk-surface); cursor: pointer; text-align: left; font: inherit; color: inherit; }
+.presetActive { border-color: var(--vk-primary); box-shadow: 0 0 0 2px var(--vk-primary-soft); }

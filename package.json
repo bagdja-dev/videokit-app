@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "samples": "node scripts/make-dev-samples.mjs",
-    "e2e:render": "node scripts/e2e-render.mjs"
+    "e2e:render": "node scripts/e2e-render.mjs",
+    "e2e:editor": "node scripts/e2e-editor.mjs"
   },
   "dependencies": {
     "jassub": "2.5.23",

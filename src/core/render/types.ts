@@ -49,7 +49,9 @@ export interface Ducking {
 }
 
 export interface AudioTrack {
+  /** Input audio, atau video (memakai track audionya, mis. audio video latar). */
   input: string;
+  /** background: di-loop/fade/ducking (musik latar, audio video latar). voice: narasi/audio cue. */
   role: 'background' | 'voice';
   start_ms: number;
   /** Akhir pemutaran (default: start + durasi sumber, atau akhir video untuk loop). */
@@ -61,10 +63,22 @@ export interface AudioTrack {
   ducking?: Ducking;
 }
 
+/**
+ * Lapisan latar (video/gambar) sepanjang durasi, di-loop, di bawah semua segmen.
+ * Bila ada: rentang tanpa segmen menampilkan latar, dan area kosong segmen `contain` / piksel transparan
+ * memperlihatkan latar (bukan background_color). Audionya, bila dipakai, didaftarkan sebagai audio track
+ * role `background` dengan input yang sama.
+ */
+export interface BackgroundLayer {
+  input: string;
+  fit?: Fit;
+}
+
 export interface RenderSpecV1 {
   spec_version: 1;
   output: RenderOutput;
   inputs: Record<string, RenderInput>;
+  background?: BackgroundLayer;
   video_track: VideoSegment[];
   audio_tracks: AudioTrack[];
   subtitles?: { input: string; font_set: string };

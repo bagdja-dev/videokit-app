@@ -41,13 +41,18 @@ export function validateSpec(spec: RenderSpecV1): SpecIssue[] {
   if (!(o.duration_ms > 0)) issues.push({ path: 'output.duration_ms', message: 'Durasi harus > 0' });
   if (!HEX.test(o.background_color)) issues.push({ path: 'output.background_color', message: 'Warna harus #RRGGBB' });
 
+  const hasBackground = !!spec.background;
+  if (spec.background) {
+    const bg = spec.inputs[spec.background.input];
+    if (!bg || (bg.kind !== 'video' && bg.kind !== 'image')) issues.push({ path: 'background.input', message: 'Latar harus input video/gambar' });
+  }
   const segs = [...spec.video_track].sort((a, b) => a.start_ms - b.start_ms);
   let cursor = 0;
   segs.forEach((s, i) => {
     const p = `video_track[${i}]`;
-    if (s.start_ms !== cursor) {
-      issues.push({ path: p, message: s.start_ms > cursor ? `Lubang ${cursor}–${s.start_ms} ms` : `Tumpang tindih di ${s.start_ms} ms` });
-    }
+    if (s.start_ms < cursor) issues.push({ path: p, message: `Tumpang tindih di ${s.start_ms} ms` });
+    // Tanpa lapisan latar, segmen wajib menutup seluruh durasi; dengan latar, rentang kosong menampilkan latar.
+    else if (s.start_ms > cursor && !hasBackground) issues.push({ path: p, message: `Lubang ${cursor}–${s.start_ms} ms` });
     if (!(s.end_ms > s.start_ms)) issues.push({ path: p, message: 'end_ms harus > start_ms' });
     if (isColorSegment(s)) {
       if (!HEX.test(s.color)) issues.push({ path: `${p}.color`, message: 'Warna harus #RRGGBB' });
@@ -59,15 +64,14 @@ export function validateSpec(spec: RenderSpecV1): SpecIssue[] {
     }
     cursor = Math.max(cursor, s.end_ms);
   });
-  if (cursor !== o.duration_ms) issues.push({ path: 'video_track', message: `Segmen harus menutup 0–${o.duration_ms} ms (berakhir di ${cursor})` });
+  if (cursor > o.duration_ms || (!hasBackground && cursor !== o.duration_ms)) {
+    issues.push({ path: 'video_track', message: `Segmen harus menutup 0–${o.duration_ms} ms (berakhir di ${cursor})` });
+  }
 
   spec.audio_tracks.forEach((a, i) => {
     const inp = spec.inputs[a.input];
-    if (!inp || inp.kind !== 'audio') issues.push({ path: `audio_tracks[${i}].input`, message: `Input audio "${a.input}" tidak ada` });
+    if (!inp || (inp.kind !== 'audio' && inp.kind !== 'video')) issues.push({ path: `audio_tracks[${i}].input`, message: `Input audio "${a.input}" tidak ada` });
   });
-  if (spec.audio_tracks.filter((a) => a.role === 'background').length > 1) {
-    issues.push({ path: 'audio_tracks', message: 'Maksimal satu track latar' });
-  }
   if (spec.subtitles && spec.inputs[spec.subtitles.input]?.kind !== 'subtitle') {
     issues.push({ path: 'subtitles.input', message: 'Input subtitle tidak ada' });
   }

@@ -68,19 +68,30 @@ if (process.env.SKIP_REFERENCE) {
 
 // Bandingkan per segmen
 const spec = JSON.parse(readFileSync('public/dev-samples/spec.json', 'utf8'));
-const ssim = (start, dur, crop = '') => {
+// SSIM per frame untuk seluruh video (tanpa seek → pasangan frame pasti tepat), lalu dirata-rata per rentang.
+const perFrameSsim = (crop = '') => {
   const c = crop ? `,crop=${crop}` : '';
-  const err = spawnSync(FF, ['-hide_banner', '-ss', String(start), '-t', String(dur), '-i', `${OUT}/browser.mp4`, '-ss', String(start), '-t', String(dur), '-i', `${OUT}/reference.mp4`,
-    '-lavfi', `[0:v]format=yuv420p${c}[a];[1:v]format=yuv420p${c}[b];[a][b]ssim`, '-f', 'null', '-'], { encoding: 'utf8' }).stderr;
-  return +(/All:([\d.]+)/.exec(err)?.[1] ?? 0);
+  const stats = `${OUT}/ssim-${crop ? 'sub' : 'full'}.txt`;
+  spawnSync(FF, ['-hide_banner', '-loglevel', 'error', '-i', `${OUT}/browser.mp4`, '-i', `${OUT}/reference.mp4`,
+    '-lavfi', `[0:v]format=yuv420p${c}[a];[1:v]format=yuv420p${c}[b];[a][b]ssim=stats_file=${stats}`, '-f', 'null', '-']);
+  return readFileSync(stats, 'utf8').trim().split('\n').map((l) => +(/All:([\d.]+)/.exec(l)?.[1] ?? 0));
 };
 const { width: W, height: H } = spec.output;
 const subCrop = `${W}:${Math.round(H * 0.3)}:0:${Math.round(H * 0.6)}`;
+const fullSsim = perFrameSsim();
+const subSsim = perFrameSsim(subCrop);
+const FPS = spec.output.fps;
+const avg = (arr, a, b) => { const sl = arr.slice(Math.round((a * FPS) / 1000), Math.round((b * FPS) / 1000)); return +(sl.reduce((x, y) => x + y, 0) / Math.max(1, sl.length)).toFixed(6); };
 const firstBlock = spec.video_track.filter((s) => s.end_ms <= 30_000);
-const segments = firstBlock.map((s) => {
-  const st = s.start_ms / 1000 + 0.2, d = Math.max(0.2, (s.end_ms - s.start_ms) / 1000 - 0.4);
-  return { segment: s.input ?? s.color, fit: s.fit ?? '-', ssim: ssim(st, d), ssim_subtitle: ssim(st, d, subCrop) };
-});
+// Rentang yang diuji: tiap segmen + rentang kosong (hanya lapisan latar) bila ada.
+const spans = firstBlock.map((s) => ({ name: s.input ?? s.color, fit: s.fit ?? '-', a: s.start_ms, b: s.end_ms }));
+const blockEnd = Math.min(30_000, spec.output.duration_ms);
+let cur = 0;
+for (const s of [...spans].sort((x, y) => x.a - y.a)) { if (s.a > cur) spans.push({ name: 'latar', fit: spec.background?.fit ?? '-', a: cur, b: s.a }); cur = Math.max(cur, s.b); }
+if (cur < blockEnd) spans.push({ name: 'latar', fit: spec.background?.fit ?? '-', a: cur, b: blockEnd });
+const segments = spans.sort((x, y) => x.a - y.a).map((s) => ({
+  segment: s.name, fit: s.fit, from_ms: s.a, to_ms: s.b, ssim: avg(fullSsim, s.a, s.b), ssim_subtitle: avg(subSsim, s.a, s.b),
+}));
 const rms = (f) => [...spawnSync(FF, ['-hide_banner', '-i', f, '-af', 'asetnsamples=24000,astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level', '-f', 'null', '-'], { encoding: 'utf8', maxBuffer: 1e8 }).stderr
   .matchAll(/RMS_level=(-?[\d.inf]+)/g)].map((m) => (m[1].includes('inf') ? -120 : +m[1]));
 const ra = rms(`${OUT}/browser.mp4`), rb = rms(`${OUT}/reference.mp4`);

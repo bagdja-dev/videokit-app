@@ -9,9 +9,9 @@ interface ToolCard {
   badge: string;
 }
 
-// Halaman kartu tool (VideoKit overview §1). Editor "Video dari Subtitle" dibangun di Fase 3.
+// Halaman kartu tool (VideoKit overview §1).
 const TOOLS: ToolCard[] = [
-  { title: 'Video dari Subtitle', description: 'Unggah SRT, isi tiap baris dengan klip atau gambar, atur gaya teks per bahasa.', badge: 'Segera hadir' },
+  { title: 'Video dari Subtitle', description: 'Unggah SRT, isi tiap baris dengan klip atau gambar, atur gaya teks per bahasa.', href: '/subtitle-video/', badge: 'Buka' },
   { title: 'Render Lab', description: 'Uji mesin render di browser memakai video contoh. Halaman internal tim.', href: '/dev/render-lab/', badge: 'Internal' },
 ];
 

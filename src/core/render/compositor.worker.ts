@@ -81,19 +81,33 @@ async function run(start: Extract<ToWorker, { type: 'start' }>) {
     }
     audioSource.close();
 
-    // 2. Video.
+    // 2. Video — per frame: lapisan latar (opsional) → segmen aktif → subtitle.
     const tVideo = performance.now();
     const opened = new Map<string, VideoSourceState | ImageSourceState>();
-    const drawFit = (img: CanvasImageSource, iw: number, ih: number, fit: Fit) => {
+    const getSource = async (key: string): Promise<VideoSourceState | ImageSourceState> => {
+      const existing = opened.get(key);
+      if (existing) return existing;
+      const src = sources[key];
+      if (!src) throw new Error(`Sumber "${key}" tidak diberikan`);
+      const state = await openSource(src, spec.inputs[key]!.kind as 'video' | 'image');
+      opened.set(key, state);
+      return state;
+    };
+    /**
+     * Gambar media dengan fit. `clear`: bersihkan ke background_color dulu — piksel transparan (PNG
+     * logo/stiker) & area kosong `contain` menampilkan warna latar. Saat ada lapisan latar, clear=false
+     * sehingga area itu memperlihatkan lapisan latar. Aturan yang sama dipakai executor server.
+     */
+    const drawFit = (img: CanvasImageSource, iw: number, ih: number, fit: Fit, clear: boolean) => {
       const cover = Math.max(W / iw, H / ih), contain = Math.min(W / iw, H / ih);
       const draw = (c: OffscreenCanvasRenderingContext2D, cw: number, ch: number, s: number) => {
         const w = iw * s, h = ih * s;
         c.drawImage(img, (cw - w) / 2, (ch - h) / 2, w, h);
       };
-      // Selalu bersihkan ke warna latar dulu: piksel transparan (PNG logo/stiker) menampilkan background_color,
-      // bukan sisa frame sebelumnya — aturan yang sama dipakai executor server.
-      ctx.fillStyle = spec.output.background_color;
-      ctx.fillRect(0, 0, W, H);
+      if (clear) {
+        ctx.fillStyle = spec.output.background_color;
+        ctx.fillRect(0, 0, W, H);
+      }
       if (fit === 'cover') return draw(ctx, W, H, cover);
       if (fit === 'contain') return draw(ctx, W, H, contain);
       sctx.fillStyle = spec.output.background_color;
@@ -107,49 +121,83 @@ async function run(start: Extract<ToWorker, { type: 'start' }>) {
     };
     const subtitleAt = (tMs: number): WorkerSubtitleLayer | undefined =>
       subtitles.find((s) => tMs >= s.start_ms && tMs < s.end_ms);
+    const allFrames = Array.from({ length: frames }, (_, i) => i);
 
-    let done = 0;
-    for (const seg of [...spec.video_track].sort((a, b) => a.start_ms - b.start_ms)) {
-      const { first, last } = segmentFrameRange(seg, FPS);
-      const idx = Array.from({ length: last - first }, (_, k) => first + k);
-      let iter: AsyncGenerator<WrappedCanvas | null> | null = null;
-      let state: VideoSourceState | ImageSourceState | null = null;
-      if (!isColorSegment(seg)) {
-        const kind = spec.inputs[seg.input]!.kind as 'video' | 'image';
-        state = opened.get(seg.input) ?? null;
-        if (!state) {
-          const src = sources[seg.input];
-          if (!src) throw new Error(`Sumber "${seg.input}" tidak diberikan`);
-          state = await openSource(src, kind);
-          opened.set(seg.input, state);
-        }
-        if (state.kind === 'video') {
-          const s = state;
-          iter = new CanvasSink(s.track, { poolSize: 3 }).canvasesAtTimestamps(idx.map((i) => sourceTimeFor(seg, (i * 1000) / FPS, s.duration, FPS)));
-        }
+    // Lapisan latar: di-loop sepanjang video.
+    let bgState: VideoSourceState | ImageSourceState | null = null;
+    let bgIter: AsyncGenerator<WrappedCanvas | null> | null = null;
+    const bgFit: Fit = spec.background?.fit ?? 'cover';
+    if (spec.background) {
+      bgState = await getSource(spec.background.input);
+      if (bgState.kind === 'video') {
+        const bs = bgState;
+        const loopSeg = { input: spec.background.input, start_ms: 0, end_ms: spec.output.duration_ms, fit: bgFit, underflow: 'loop' as const };
+        bgIter = new CanvasSink(bs.track, { poolSize: 3 }).canvasesAtTimestamps(allFrames.map((i) => sourceTimeFor(loopSeg, (i * 1000) / FPS, bs.duration, FPS)));
       }
-      for (const i of idx) {
-        checkCancel();
-        const tMs = (i * 1000) / FPS;
-        if (isColorSegment(seg)) {
-          ctx.fillStyle = seg.color;
-          ctx.fillRect(0, 0, W, H);
-        } else if (state?.kind === 'image') {
-          drawFit(state.bitmap, state.bitmap.width, state.bitmap.height, seg.fit);
-        } else if (iter) {
-          const { value } = await iter.next();
-          if (value) drawFit(value.canvas, value.canvas.width, value.canvas.height, seg.fit);
-        }
-        const sub = subtitleAt(tMs);
-        if (sub) ctx.drawImage(sub.bitmap, 0, 0, W, H);
-        await videoSource.add(i / FPS, 1 / FPS);
-        done++;
-        if (done % 15 === 0 || done === frames) {
-          post({ type: 'progress', progress: { stage: 'video', progress: done / frames, frame: done, totalFrames: frames } });
-        }
-      }
-      await iter?.return(undefined);
     }
+
+    interface Active { seg: (typeof spec.video_track)[number]; last: number; state: VideoSourceState | ImageSourceState | null; iter: AsyncGenerator<WrappedCanvas | null> | null }
+    const segs = [...spec.video_track].sort((a, b) => a.start_ms - b.start_ms);
+    let si = 0;
+    let cur: Active | null = null;
+
+    for (const i of allFrames) {
+      checkCancel();
+      const tMs = (i * 1000) / FPS;
+      if (cur && i >= cur.last) { await cur.iter?.return(undefined); cur = null; }
+      while (!cur && si < segs.length) {
+        const seg = segs[si]!;
+        const { first, last } = segmentFrameRange(seg, FPS);
+        if (last <= first || last <= i) { si++; continue; } // segmen tanpa frame
+        if (i < first) break; // rentang kosong sebelum segmen berikutnya → latar
+        si++;
+        let state: VideoSourceState | ImageSourceState | null = null;
+        let iter: AsyncGenerator<WrappedCanvas | null> | null = null;
+        if (!isColorSegment(seg)) {
+          state = await getSource(seg.input);
+          if (state.kind === 'video') {
+            const vs = state;
+            const idx = Array.from({ length: last - i }, (_, k) => i + k);
+            iter = new CanvasSink(vs.track, { poolSize: 3 }).canvasesAtTimestamps(idx.map((f) => sourceTimeFor(seg, (f * 1000) / FPS, vs.duration, FPS)));
+          }
+        }
+        cur = { seg, last, state, iter };
+      }
+
+      // a. latar
+      if (bgState) {
+        if (bgState.kind === 'image') drawFit(bgState.bitmap, bgState.bitmap.width, bgState.bitmap.height, bgFit, true);
+        else {
+          const { value } = await bgIter!.next();
+          if (value) drawFit(value.canvas, value.canvas.width, value.canvas.height, bgFit, true);
+        }
+      } else if (!cur) {
+        ctx.fillStyle = spec.output.background_color;
+        ctx.fillRect(0, 0, W, H);
+      }
+      // b. segmen aktif
+      if (cur) {
+        const clear = !bgState;
+        if (isColorSegment(cur.seg)) {
+          ctx.fillStyle = cur.seg.color;
+          ctx.fillRect(0, 0, W, H);
+        } else if (cur.state?.kind === 'image') {
+          drawFit(cur.state.bitmap, cur.state.bitmap.width, cur.state.bitmap.height, cur.seg.fit, clear);
+        } else if (cur.iter) {
+          const { value } = await cur.iter.next();
+          if (value) drawFit(value.canvas, value.canvas.width, value.canvas.height, cur.seg.fit, clear);
+        }
+      }
+      // c. subtitle
+      const sub = subtitleAt(tMs);
+      if (sub) ctx.drawImage(sub.bitmap, 0, 0, W, H);
+      await videoSource.add(i / FPS, 1 / FPS);
+      if ((i + 1) % 15 === 0 || i + 1 === frames) {
+        post({ type: 'progress', progress: { stage: 'video', progress: (i + 1) / frames, frame: i + 1, totalFrames: frames } });
+      }
+    }
+    await cur?.iter?.return(undefined);
+    await bgIter?.return(undefined);
     videoSource.close();
     post({ type: 'progress', progress: { stage: 'finalizing', progress: 1 } });
     await output.finalize();

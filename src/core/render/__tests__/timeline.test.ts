@@ -36,13 +36,29 @@ describe('validateSpec', () => {
     expect(validateSpec(s).some((i) => i.path === 'video_track')).toBe(true);
   });
 
-  it('menolak resolusi ganjil, input hilang, dan dua track latar', () => {
+  it('menolak resolusi ganjil dan input hilang', () => {
     const s = base();
     s.output.width = 1081;
     s.video_track[0] = { input: 'missing', start_ms: 0, end_ms: 4000, fit: 'cover' };
-    s.audio_tracks.push({ input: 'bgm', role: 'background', start_ms: 0 });
     const paths = validateSpec(s).map((i) => i.path);
-    expect(paths).toEqual(expect.arrayContaining(['output', 'video_track[0].input', 'audio_tracks']));
+    expect(paths).toEqual(expect.arrayContaining(['output', 'video_track[0].input']));
+  });
+
+  it('dengan lapisan latar: rentang kosong sah, tumpang tindih tetap ditolak', () => {
+    const s = base();
+    s.inputs.bgv = { kind: 'video' };
+    s.background = { input: 'bgv' };
+    s.video_track = [{ input: 'a', start_ms: 1000, end_ms: 4000, fit: 'contain' }, { input: 'img', start_ms: 6000, end_ms: 8000, fit: 'cover' }];
+    s.audio_tracks.push({ input: 'bgv', role: 'background', start_ms: 0, loop: true }); // audio video latar + musik
+    expect(validateSpec(s)).toEqual([]);
+    s.video_track.push({ input: 'img', start_ms: 7000, end_ms: 9000, fit: 'cover' });
+    expect(validateSpec(s).some((i) => i.message.startsWith('Tumpang tindih'))).toBe(true);
+  });
+
+  it('latar harus video/gambar', () => {
+    const s = base();
+    s.background = { input: 'bgm' };
+    expect(validateSpec(s).map((i) => i.path)).toContain('background.input');
   });
 });
 

@@ -66,8 +66,8 @@ async function schedule(spec: RenderSpecV1, sources: RenderSources): Promise<Sch
     duckers.push(pseudo);
     voiceDur.set(pseudo, seg.end_ms - seg.start_ms);
   }
-  const bg = spec.audio_tracks.find((a) => a.role === 'background');
-  if (bg) {
+  // Semua track latar (musik, audio video latar): loop/fade + ducking oleh voice & audio asli klip.
+  for (const bg of spec.audio_tracks.filter((a) => a.role === 'background')) {
     const buf = await get(bg.input);
     const end = bg.end_ms ?? (bg.loop ? spec.output.duration_ms : Math.min(bg.start_ms + buf.duration * 1000, spec.output.duration_ms));
     out.push({

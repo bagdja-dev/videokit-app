@@ -19,51 +19,64 @@ const durationOf = (p) => +execFileSync(FP, ['-v', 'error', '-show_entries', 'fo
 const args = ['-hide_banner', '-loglevel', 'error', '-y'];
 const filters = [];
 let n = 0;
-const inputIdx = new Map();
 const addInput = (key, extra = []) => { args.push(...extra, '-i', pathOf(key)); return n++; };
 
+// Fit menghasilkan lapisan RGBA ukuran output. `contain` diberi padding TRANSPARAN sehingga area kosong
+// memperlihatkan lapisan di bawahnya (latar atau background_color) — aturan sama dengan compositor.worker.ts.
 const fit = (src, f, label) => {
-  if (f === 'cover') filters.push(`[${src}]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1[${label}]`);
-  else if (f === 'contain') filters.push(`[${src}]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=${spec.output.background_color},setsar=1[${label}]`);
+  if (f === 'cover') filters.push(`[${src}]format=rgba,scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},setsar=1[${label}]`);
+  else if (f === 'contain') filters.push(`[${src}]format=rgba,scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black@0,setsar=1[${label}]`);
   else {
     const sw = Math.round(W / BLUR_DOWNSCALE), sh = Math.round(H / BLUR_DOWNSCALE);
-    filters.push(`[${src}]split[${label}a][${label}b]`);
+    filters.push(`[${src}]format=rgba,split[${label}a][${label}b]`);
     filters.push(`[${label}a]scale=${Math.round(sw * 1.15)}:${Math.round(sh * 1.15)}:force_original_aspect_ratio=increase,crop=${sw}:${sh},gblur=sigma=5,scale=${W}:${H}:flags=bilinear[${label}bg]`);
     filters.push(`[${label}b]scale=${W}:${H}:force_original_aspect_ratio=decrease[${label}fg]`);
-    filters.push(`[${label}bg][${label}fg]overlay=(W-w)/2:(H-h)/2,setsar=1[${label}]`);
+    filters.push(`[${label}bg][${label}fg]overlay=(W-w)/2:(H-h)/2:format=auto,setsar=1[${label}]`);
   }
 };
 
-const labels = [...spec.video_track].sort((a, b) => a.start_ms - b.start_ms).map((seg, i) => {
-  const d = (seg.end_ms - seg.start_ms) / 1000;
-  const L = `v${i}`;
-  if (seg.color) { filters.push(`color=c=${seg.color}:s=${W}x${H}:r=${FPS}:d=${d},setsar=1,format=gbrp[${L}]`); return L; }
-  const inp = spec.inputs[seg.input];
-  if (inp.kind === 'image') {
-    const idx = addInput(seg.input, ['-loop', '1', '-framerate', String(FPS), '-t', String(d)]);
-    // Alfa gambar dikomposit di atas background_color (aturan sama dengan compositor.worker.ts)
-    filters.push(`[${idx}:v]format=rgba[${L}i]`);
-    fit(`${L}i`, seg.fit, `${L}f`);
-    filters.push(`color=c=${spec.output.background_color}:s=${W}x${H}:r=${FPS}:d=${d}[${L}bgc]`);
-    filters.push(`[${L}bgc][${L}f]overlay=0:0:shortest=1,fps=${FPS},trim=duration=${d},format=gbrp[${L}]`);
-    return L;
-  }
-  const idx = addInput(seg.input, ['-threads', '1']);
-  filters.push(`[${idx}:v]trim=start=${(seg.source_in_ms ?? 0) / 1000}:duration=${d},setpts=PTS-STARTPTS,fps=${FPS},tpad=stop_mode=clone:stop_duration=${d},trim=duration=${d}[${L}r]`);
-  fit(`${L}r`, seg.fit, `${L}f`);
-  filters.push(`[${L}f]format=gbrp[${L}]`);
-  return L;
-});
-filters.push(`${labels.map((l) => `[${l}]`).join('')}concat=n=${labels.length}:v=1:a=0[vcat]`);
-const subs = spec.subtitles ? `ass=${pathOf(spec.subtitles.input)}:fontsdir=public/fonts/latin-v1,` : '';
-filters.push(`[vcat]${subs}scale=out_color_matrix=bt709:out_range=tv,format=yuv420p[vout]`);
+// Lapisan dasar sepanjang durasi: video/gambar latar (loop) di atas background_color, atau warna polos.
+filters.push(`color=c=${spec.output.background_color}:s=${W}x${H}:r=${FPS}:d=${DUR},format=rgba[base0]`);
+let base = 'base0';
+if (spec.background) {
+  const bgInp = spec.inputs[spec.background.input];
+  const idx = bgInp.kind === 'image'
+    ? addInput(spec.background.input, ['-loop', '1', '-framerate', String(FPS), '-t', String(DUR)])
+    : addInput(spec.background.input, ['-stream_loop', '-1', '-threads', '1']);
+  filters.push(`[${idx}:v]trim=duration=${DUR},setpts=PTS-STARTPTS,fps=${FPS}[bgr]`);
+  fit('bgr', spec.background.fit ?? 'cover', 'bgf');
+  filters.push(`[base0][bgf]overlay=0:0:shortest=1:format=auto[base1]`);
+  base = 'base1';
+}
 
-// Audio — amplop latar identik dengan src/core/render/envelope.ts
+// Tiap segmen jadi lapisan RGBA yang muncul hanya di rentangnya, ditumpuk di atas lapisan dasar.
+[...spec.video_track].sort((a, b) => a.start_ms - b.start_ms).forEach((seg, i) => {
+  const d = (seg.end_ms - seg.start_ms) / 1000;
+  const st = seg.start_ms / 1000;
+  const L = `v${i}`;
+  if (seg.color) {
+    filters.push(`color=c=${seg.color}:s=${W}x${H}:r=${FPS}:d=${d},format=rgba[${L}f]`);
+  } else if (spec.inputs[seg.input].kind === 'image') {
+    const idx = addInput(seg.input, ['-loop', '1', '-framerate', String(FPS), '-t', String(d)]);
+    fit(`${idx}:v`, seg.fit, `${L}f`);
+  } else {
+    const idx = addInput(seg.input, ['-threads', '1']);
+    filters.push(`[${idx}:v]trim=start=${(seg.source_in_ms ?? 0) / 1000}:duration=${d},setpts=PTS-STARTPTS,fps=${FPS},tpad=stop_mode=clone:stop_duration=${d},trim=duration=${d}[${L}r]`);
+    fit(`${L}r`, seg.fit, `${L}f`);
+  }
+  filters.push(`[${L}f]fps=${FPS},trim=duration=${d},setpts=PTS-STARTPTS+${st}/TB[${L}t]`);
+  filters.push(`[${base}][${L}t]overlay=0:0:format=auto:eof_action=pass:enable='between(t,${st},${(seg.end_ms / 1000 - 0.0001).toFixed(4)})'[c${i}]`);
+  base = `c${i}`;
+});
+const subs = spec.subtitles ? `ass=${pathOf(spec.subtitles.input)}:fontsdir=public/fonts/latin-v1,` : '';
+filters.push(`[${base}]trim=duration=${DUR},format=gbrp,${subs}scale=out_color_matrix=bt709:out_range=tv,format=yuv420p[vout]`);
+
+// Audio — amplop latar identik dengan src/core/render/envelope.ts; boleh lebih dari satu track latar
+// (musik + audio video latar), masing-masing di-loop, fade, dan ducking oleh voice.
 const voices = spec.audio_tracks.filter((a) => a.role === 'voice');
-const bg = spec.audio_tracks.find((a) => a.role === 'background');
 const vEnd = (v) => v.end_ms ?? v.start_ms + durationOf(pathOf(v.input)) * 1000;
 const aLabels = [];
-if (bg) {
+spec.audio_tracks.filter((a) => a.role === 'background').forEach((bg, bi) => {
   const d = bg.ducking;
   const spans = voices.map((v) => ({ start: v.start_ms, end: vEnd(v) }));
   const at = (t) => {
@@ -83,9 +96,9 @@ if (bg) {
     expr = `if(lt(t\\,${(b.t / 1000).toFixed(3)})\\,(${a.g.toFixed(5)}+(${(b.g - a.g).toFixed(5)})*(t-${(a.t / 1000).toFixed(3)})/${((b.t - a.t) / 1000).toFixed(3)})\\,${expr})`;
   }
   const idx = addInput(bg.input, bg.loop ? ['-stream_loop', '-1'] : []);
-  filters.push(`[${idx}:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:${DUR},asetpts=PTS-STARTPTS,volume='${expr}':eval=frame[abg]`);
-  aLabels.push('abg');
-}
+  filters.push(`[${idx}:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:${DUR},asetpts=PTS-STARTPTS,volume='${expr}':eval=frame,apad[abg${bi}]`);
+  aLabels.push(`abg${bi}`);
+});
 voices.forEach((v, i) => {
   const idx = addInput(v.input);
   filters.push(`[${idx}:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:${(vEnd(v) - v.start_ms) / 1000},asetpts=PTS-STARTPTS,volume=${v.volume ?? 1},adelay=${v.start_ms}:all=1,apad[av${i}]`);
@@ -100,7 +113,6 @@ args.push('-filter_complex', filters.join(';'), '-map', '[vout]', '-map', '[aout
   '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', String(FPS),
   '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
   '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-t', String(DUR), '-movflags', '+faststart', outPath);
-void inputIdx;
 const t0 = Date.now();
 const r = spawnSync(FF, args, { stdio: 'inherit' });
 if (r.status !== 0) process.exit(r.status ?? 1);
