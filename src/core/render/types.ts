@@ -3,7 +3,8 @@
 
 export type Fit = 'cover' | 'contain' | 'blur';
 export type Underflow = 'freeze' | 'loop';
-export type InputKind = 'video' | 'image' | 'audio' | 'subtitle';
+/** `avatar` = file .vrm, `motion` = motion track v1 (tool Avatar Rekam). */
+export type InputKind = 'video' | 'image' | 'audio' | 'subtitle' | 'avatar' | 'motion';
 
 export interface RenderOutput {
   width: number;
@@ -74,6 +75,39 @@ export interface BackgroundLayer {
   fit?: Fit;
 }
 
+export type AvatarAnchor = 'bottom-right' | 'bottom-left' | 'bottom-center' | 'top-right' | 'top-left' | 'center';
+
+export interface AvatarPlacement {
+  anchor: AvatarAnchor;
+  /** Lebar kotak avatar sebagai fraksi lebar output (0.1–1). */
+  width: number;
+  /** Rasio lebar/tinggi kotak avatar (default 3/4 — potret dada ke atas). */
+  aspect?: number;
+  /** Jarak dari tepi sebagai fraksi sisi terpendek output (default 0.03). */
+  margin?: number;
+}
+
+/**
+ * Lapisan avatar (plan/videokit/avatar-record/overview.md §6.2): avatar VRM digambar per frame dari motion track,
+ * ditumpuk di atas video dan di bawah subtitle. Hanya executor browser (AV-D5).
+ */
+export interface AvatarOverlay {
+  type: 'avatar';
+  input: string;
+  motion: string;
+  start_ms: number;
+  end_ms: number;
+  /** Waktu motion track yang dipakai pada start_ms (potong awal rekaman). */
+  motion_offset_ms?: number;
+  placement: AvatarPlacement;
+  /** null/undefined = transparan. */
+  background?: string | null;
+  framing?: 'bust' | 'head';
+  mirror?: boolean;
+  /** Pose netral saat kalibrasi (radian & nilai blendshape istirahat). */
+  calibration?: { head: { pitch: number; yaw: number; roll: number }; rest: Record<string, number> };
+}
+
 export interface RenderSpecV1 {
   spec_version: 1;
   output: RenderOutput;
@@ -82,6 +116,7 @@ export interface RenderSpecV1 {
   video_track: VideoSegment[];
   audio_tracks: AudioTrack[];
   subtitles?: { input: string; font_set: string };
+  overlays?: AvatarOverlay[];
 }
 
 /** Sumber input untuk executor browser: Blob/File lokal (tanpa upload) atau URL. */

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "vendor": "node scripts/vendor-jassub.mjs && node scripts/fetch-fonts-cjk.mjs",
+    "vendor": "node scripts/vendor-jassub.mjs && node scripts/fetch-fonts-cjk.mjs && node scripts/vendor-mediapipe.mjs",
     "predev": "npm run vendor",
     "dev": "next dev --webpack",
     "predev:https": "npm run vendor",
@@ -16,20 +16,25 @@
     "test": "vitest run",
     "samples": "node scripts/make-dev-samples.mjs",
     "e2e:render": "node scripts/e2e-render.mjs",
-    "e2e:editor": "node scripts/e2e-editor.mjs"
+    "e2e:editor": "node scripts/e2e-editor.mjs",
+    "e2e:avatar": "node scripts/e2e-avatar.mjs"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "1.2.2",
+    "@pixiv/three-vrm": "3.5.5",
     "jassub": "2.5.23",
     "mediabunny": "1.65.0",
     "next": "16.4.6",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "three": "0.187.0",
     "zustand": "5.0.16"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "@types/three": "0.187.0",
     "esbuild": "0.28.2",
     "eslint": "9.39.5",
     "eslint-config-next": "16.4.6",

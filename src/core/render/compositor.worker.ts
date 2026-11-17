@@ -11,6 +11,7 @@ import { segmentFrameRange, sourceTimeFor, totalFrames } from './timeline';
 import type { Fit, RenderSource } from './types';
 import { isColorSegment } from './types';
 import { AUDIO_SAMPLE_RATE } from './audio';
+import type { AvatarOverlayRenderer } from '../avatar/overlay-renderer';
 
 const post = (m: FromWorker) => (self as unknown as Worker).postMessage(m);
 
@@ -136,6 +137,19 @@ async function run(start: Extract<ToWorker, { type: 'start' }>) {
       }
     }
 
+    // Lapisan avatar (tool Avatar Rekam): three.js dimuat hanya bila spec memakainya.
+    let avatar: AvatarOverlayRenderer | null = null;
+    const ov = spec.overlays?.[0];
+    if (ov) {
+      const bytes = async (key: string) => {
+        const s = sources[key];
+        if (!s) throw new Error(`Sumber "${key}" tidak diberikan`);
+        return typeof s === 'string' ? (await fetch(s)).arrayBuffer() : s.arrayBuffer();
+      };
+      const { createAvatarOverlay } = await import('../avatar/overlay-renderer');
+      avatar = await createAvatarOverlay(ov, await bytes(ov.input), await bytes(ov.motion), W, H, FPS);
+    }
+
     interface Active { seg: (typeof spec.video_track)[number]; last: number; state: VideoSourceState | ImageSourceState | null; iter: AsyncGenerator<WrappedCanvas | null> | null }
     const segs = [...spec.video_track].sort((a, b) => a.start_ms - b.start_ms);
     let si = 0;
@@ -188,7 +202,12 @@ async function run(start: Extract<ToWorker, { type: 'start' }>) {
           if (value) drawFit(value.canvas, value.canvas.width, value.canvas.height, cur.seg.fit, clear);
         }
       }
-      // c. subtitle
+      // c. avatar
+      if (avatar?.active(tMs)) {
+        avatar.render(tMs);
+        ctx.drawImage(avatar.canvas, avatar.rect.x, avatar.rect.y);
+      }
+      // d. subtitle
       const sub = subtitleAt(tMs);
       if (sub) ctx.drawImage(sub.bitmap, 0, 0, W, H);
       await videoSource.add(i / FPS, 1 / FPS);
@@ -198,6 +217,7 @@ async function run(start: Extract<ToWorker, { type: 'start' }>) {
     }
     await cur?.iter?.return(undefined);
     await bgIter?.return(undefined);
+    avatar?.dispose();
     videoSource.close();
     post({ type: 'progress', progress: { stage: 'finalizing', progress: 1 } });
     await output.finalize();

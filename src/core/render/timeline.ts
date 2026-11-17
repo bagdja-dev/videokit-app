@@ -72,6 +72,16 @@ export function validateSpec(spec: RenderSpecV1): SpecIssue[] {
     const inp = spec.inputs[a.input];
     if (!inp || (inp.kind !== 'audio' && inp.kind !== 'video')) issues.push({ path: `audio_tracks[${i}].input`, message: `Input audio "${a.input}" tidak ada` });
   });
+  (spec.overlays ?? []).forEach((ov, i) => {
+    const p = `overlays[${i}]`;
+    if (ov.type !== 'avatar') { issues.push({ path: `${p}.type`, message: 'Jenis overlay tidak dikenal' }); return; }
+    if (spec.inputs[ov.input]?.kind !== 'avatar') issues.push({ path: `${p}.input`, message: 'Input avatar (.vrm) tidak ada' });
+    if (spec.inputs[ov.motion]?.kind !== 'motion') issues.push({ path: `${p}.motion`, message: 'Input motion track tidak ada' });
+    if (!(ov.end_ms > ov.start_ms) || ov.start_ms < 0 || ov.end_ms > o.duration_ms) issues.push({ path: p, message: 'Rentang overlay di luar durasi' });
+    if (!(ov.placement.width >= 0.1 && ov.placement.width <= 1)) issues.push({ path: `${p}.placement.width`, message: 'Lebar avatar harus 0.1–1' });
+    if (ov.background && !HEX.test(ov.background)) issues.push({ path: `${p}.background`, message: 'Warna harus #RRGGBB' });
+  });
+  if ((spec.overlays?.length ?? 0) > 1) issues.push({ path: 'overlays', message: 'Versi ini hanya mendukung satu avatar per video' });
   if (spec.subtitles && spec.inputs[spec.subtitles.input]?.kind !== 'subtitle') {
     issues.push({ path: 'subtitles.input', message: 'Input subtitle tidak ada' });
   }
