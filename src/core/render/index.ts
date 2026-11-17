@@ -1,0 +1,11 @@
+export * from './types';
+export { validateSpec, totalFrames, sourceTimeFor, segmentFrameRange } from './timeline';
+export type { SpecIssue } from './timeline';
+export { backgroundEnvelope } from './envelope';
+export { detectRenderCapabilities, MAX_DURATION_MEMORY_MS, MAX_DURATION_OPFS_MS } from './capabilities';
+export type { RenderCapabilities } from './capabilities';
+export { renderVideo, RenderError, LATIN_V1_FONTS } from './render';
+export type { RenderOptions } from './render';
+export { makeVideoWorkingCopy, makeImageWorkingCopy } from './working-copy';
+export type { WorkingCopyResult, WorkingCopyTarget } from './working-copy';
+export { deleteRender, pruneRenders } from './opfs';

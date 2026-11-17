@@ -1,0 +1,12 @@
+.title { margin: 0 0 4px; color: var(--vk-primary); }
+.section { margin-top: 16px; }
+.h2 { margin: 0 0 8px; font-size: 17px; }
+.list { margin: 8px 0; padding-left: 20px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.progressBlock { margin: 12px 0; }
+.result { display: grid; gap: 12px; margin-top: 12px; grid-template-columns: minmax(0, 280px) 1fr; align-items: start; }
+.video { width: 100%; max-height: 70vh; border-radius: 8px; background: #000; }
+@media (max-width: 640px) {
+  .result { grid-template-columns: 1fr; }
+}
+.diag { margin-bottom: 16px; font: 13px/1.5 ui-monospace, monospace; word-break: break-all; }
