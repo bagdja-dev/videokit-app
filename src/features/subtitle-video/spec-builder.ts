@@ -2,6 +2,7 @@
 // Aturan visual (§3.5): visual cue tampil dari awal cue sampai cue berikutnya mulai (jeda ditahan);
 // sebelum cue pertama memakai visual cue pertama. Cue tanpa visual → video latar, atau warna latar.
 import { buildAss } from '@/core/subtitle/ass';
+import { fontSetOf } from '@/core/render/fonts';
 import type { AudioTrack, RenderSpecV1, VideoSegment } from '@/core/render';
 import { OUTPUT_PRESETS, type SubtitleVideoProject } from './model';
 
@@ -116,7 +117,7 @@ export function buildRenderJob(p: SubtitleVideoProject, opts: BuildOptions = {})
     ...(background ? { background } : {}),
     video_track: segments,
     audio_tracks: audio,
-    subtitles: { input: SUBS_KEY, font_set: 'latin-v1' },
+    subtitles: { input: SUBS_KEY, font_set: fontSetOf(ass) },
   };
   return { spec, ass, mediaIds: Object.keys(inputs).filter((k) => k !== SUBS_KEY), subtitleKey: SUBS_KEY };
 }

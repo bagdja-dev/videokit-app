@@ -7,16 +7,19 @@ Shopping made easier
 00:00:03,000 --> 00:00:06,000
 Pilih produk favoritmu dalam hitungan detik saja
 Pick your favourite product in seconds
+お気に入りの商品をほんの数秒で選んで、今日中にお届けします。
 
 3
 00:00:06,000 --> 00:00:09,000
 Gratis ongkir ke seluruh Jawa
 Free shipping across Java
+자바 전역 무료 배송, 오늘 주문하면 내일 도착
 
 4
 00:00:09,000 --> 00:00:12,000
 Bayar aman, bisa cicilan
 Secure payment, instalments available
+安全支付，支持分期付款，购物更轻松。
 
 5
 00:00:12,000 --> 00:00:15,000
@@ -32,6 +35,7 @@ Guaranteed quality, money-back guarantee
 00:00:18,000 --> 00:00:21,000
 Ribuan pelanggan puas setiap hari
 Thousands of happy customers every day
+毎日たくさんのお客様に「満足」と言っていただいています。
 
 8
 00:00:21,000 --> 00:00:24,000

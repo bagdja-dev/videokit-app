@@ -2,7 +2,16 @@
 // Butuh ffmpeg (FFMPEG=/path). Pakai: npm run samples   (opsi: DURATION_REPEAT=20 untuk uji 10 menit)
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { buildAss, parseSrt } from './lib/dev-ass.mjs';
+import { build } from 'esbuild';
+import { parseSrt } from './lib/dev-ass.mjs';
+
+// ASS dibuat dengan generator PRODUKSI (src/core/subtitle/ass.ts, termasuk font cadangan & pemotongan CJK).
+mkdirSync('e2e-output', { recursive: true });
+await build({
+  stdin: { contents: "export { buildAss } from './src/core/subtitle/ass'; export { fontSetOf } from './src/core/render/fonts';", resolveDir: '.', loader: 'ts' },
+  bundle: true, format: 'esm', platform: 'node', outfile: 'e2e-output/.ass-bundle.mjs', logLevel: 'warning',
+});
+const { buildAss, fontSetOf } = await import(new URL('../e2e-output/.ass-bundle.mjs', import.meta.url).href);
 
 const FF = process.env.FFMPEG ?? (existsSync('/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg') ? '/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg' : 'ffmpeg');
 const OUT = 'public/dev-samples';
@@ -26,10 +35,12 @@ make('vo2.m4a', (o) => ff('-f', 'lavfi', '-i', 'aevalsrc=0.6*sin(2*PI*660*t)*(0.
 
 const output = { width: 1080, height: 1920, fps: 30, duration_ms: 30_000 * REPEAT, background_color: '#000000' };
 const design = {
-  anchor: 'bottom', margin_v: 260, margin_h: 80,
+  anchor: 'bottom', marginV: 260, marginH: 80,
   slots: [
-    { font: 'Poppins', bold: true, italic: false, size: 72, color: '#FFFFFF', outline_color: '#000000', outline: 4, shadow: 2 },
-    { font: 'Poppins', bold: false, italic: true, size: 48, color: '#FFE066', outline_color: '#000000', outline: 3, shadow: 1 },
+    { label: 'ID', font: 'Poppins', bold: true, italic: false, size: 72, color: '#FFFFFF', outlineColor: '#000000', outline: 4, shadow: 2, box: false, boxColor: '#000000', boxOpacity: 60 },
+    { label: 'EN', font: 'Poppins', bold: false, italic: true, size: 48, color: '#FFE066', outlineColor: '#000000', outline: 3, shadow: 1, box: false, boxColor: '#000000', boxOpacity: 60 },
+    // Baris ke-3 (JP/KR/ZH) berfont Latin → menguji font cadangan CJK + pemotongan baris.
+    { label: 'CJK', font: 'Poppins', bold: true, italic: false, size: 52, color: '#9FF3E6', outlineColor: '#003333', outline: 3, shadow: 1, box: false, boxColor: '#000000', boxOpacity: 60 },
   ],
 };
 const block = [
@@ -67,6 +78,8 @@ const spec = {
 };
 const cues = parseSrt(readFileSync('scripts/lib/sample.srt', 'utf8'));
 const allCues = Array.from({ length: REPEAT }, (_, k) => cues.map((c) => shift(c, k))).flat();
-writeFileSync(`${OUT}/subs.ass`, buildAss(allCues, design, output));
+const ass = buildAss(allCues, design, output);
+spec.subtitles.font_set = fontSetOf(ass);
+writeFileSync(`${OUT}/subs.ass`, ass);
 writeFileSync(`${OUT}/spec.json`, JSON.stringify(spec, null, 2));
 console.log(`dev-samples siap: ${output.duration_ms / 1000} detik, ${spec.video_track.length} segmen, ${allCues.length} cue`);

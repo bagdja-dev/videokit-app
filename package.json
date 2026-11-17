@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "vendor": "node scripts/vendor-jassub.mjs",
+    "vendor": "node scripts/vendor-jassub.mjs && node scripts/fetch-fonts-cjk.mjs",
     "predev": "npm run vendor",
     "dev": "next dev --webpack",
     "predev:https": "npm run vendor",

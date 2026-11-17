@@ -9,7 +9,7 @@ import styles from './render-lab.module.css';
 
 const SAMPLE_BASE = '/dev-samples/';
 const STAGE_LABEL: Record<RenderProgress['stage'], string> = {
-  preparing: 'Menyiapkan', subtitles: 'Merender subtitle', audio: 'Mencampur audio',
+  preparing: 'Menyiapkan', fonts: 'Mengunduh font', subtitles: 'Merender subtitle', audio: 'Mencampur audio',
   video: 'Merender video', finalizing: 'Menyelesaikan file', done: 'Selesai',
 };
 

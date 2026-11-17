@@ -12,8 +12,8 @@ export interface SubtitleLayer {
 export interface SubtitleRenderOptions {
   width: number;
   height: number;
-  /** URL font (latin-v1). */
-  fonts: string[];
+  /** Font (URL atau byte) yang dirujuk ASS. */
+  fonts: Array<string | Uint8Array>;
   /** Basis URL vendor JASSUB (hasil `npm run vendor`). */
   vendorBase?: string;
   signal?: AbortSignal;

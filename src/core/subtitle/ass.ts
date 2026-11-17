@@ -1,6 +1,9 @@
 // Generator ASS dari cue + desain slot (VideoKit overview §4.3). Satu cue = SATU event; pindah slot dengan
 // \N{\rSlotN} sehingga baris yang ter-wrap otomatis mendorong slot berikutnya ke bawah.
+// Huruf CJK: font cadangan + titik potong baris, lihat cjk.ts.
 // Fase MVP lokal: dijalankan di browser. Saat videokit-api ada, versi server menjadi otoritatif.
+
+import { assLineText, slotCjkLangs } from './cjk';
 
 export type Anchor = 'top' | 'middle' | 'bottom';
 
@@ -48,7 +51,6 @@ const assTime = (ms: number) => {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${Math.floor(cs / 360000)}:${p(Math.floor(cs / 6000) % 60)}:${p(Math.floor(cs / 100) % 60)}.${p(cs % 100)}`;
 };
-const escapeAss = (t: string) => t.replace(/\\/g, '\\\\').replace(/\{/g, '\\{').replace(/\}/g, '\\}');
 const ALIGN: Record<Anchor, number> = { bottom: 2, middle: 5, top: 8 };
 
 export function buildAss(cues: AssCue[], design: SubtitleDesign, output: { width: number; height: number }): string {
@@ -65,9 +67,14 @@ export function buildAss(cues: AssCue[], design: SubtitleDesign, output: { width
     ].join(',');
   });
   const lastSlot = Math.max(0, design.slots.length - 1);
+  const langs = slotCjkLangs(cues, design.slots.length, design.slots.map((s) => s.font));
   const events = cues.map((c) => {
     const text = c.lines
-      .map((line, i) => (i === 0 ? '' : `\\N{\\rSlot${Math.min(i, lastSlot) + 1}}`) + escapeAss(line))
+      .map((line, i) => {
+        const slot = Math.min(i, lastSlot);
+        const font = design.slots[slot]?.font ?? 'Poppins';
+        return (i === 0 ? '' : `\\N{\\rSlot${slot + 1}}`) + assLineText(line, font, langs[slot] ?? 'zh-hans');
+      })
       .join('');
     return `Dialogue: 0,${assTime(c.start_ms)},${assTime(c.end_ms)},Slot1,,0,0,0,,${text}`;
   });
@@ -82,8 +89,3 @@ export function buildAss(cues: AssCue[], design: SubtitleDesign, output: { width
   ].join('\n');
 }
 
-/** Font paket latin-v1 yang tersedia (overview §4.4, D7). */
-export const LATIN_V1_FAMILIES = [
-  { family: 'Poppins', bold: true, italic: true },
-  { family: 'Bebas Neue', bold: false, italic: false },
-] as const;

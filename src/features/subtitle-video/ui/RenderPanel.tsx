@@ -10,7 +10,7 @@ import styles from './editor.module.css';
 
 const PREVIEW_MAX_MS = 8000;
 const STAGE: Record<RenderProgress['stage'], string> = {
-  preparing: 'Menyiapkan', subtitles: 'Merender subtitle', audio: 'Mencampur audio', video: 'Merender video', finalizing: 'Menyelesaikan file', done: 'Selesai',
+  preparing: 'Menyiapkan', fonts: 'Mengunduh font', subtitles: 'Merender subtitle', audio: 'Mencampur audio', video: 'Merender video', finalizing: 'Menyelesaikan file', done: 'Selesai',
 };
 
 const errorLines = (e: unknown): string[] => {

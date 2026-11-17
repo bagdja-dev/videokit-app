@@ -1,7 +1,7 @@
 'use client';
 
 import type { Anchor } from '@/core/subtitle/ass';
-import { LATIN_V1_FAMILIES } from '@/core/subtitle/ass';
+import { FONT_FAMILIES, findFamily } from '@/core/render/fonts';
 import type { SubtitleVideoProject } from '../model';
 import { useEditor } from '../store';
 import styles from './editor.module.css';
@@ -26,8 +26,12 @@ export default function DesignPanel({ project }: { project: SubtitleVideoProject
           <input type="number" min={0} max={500} value={d.marginH} onChange={(e) => updateDesign({ marginH: +e.target.value })} />
         </label>
       </div>
+      <p className={styles.muted} style={{ marginTop: 8 }}>
+        Huruf Korea, Jepang, dan Mandarin pada baris berfont Latin otomatis memakai Noto Sans yang sesuai. Font tersebut
+        baru diunduh saat render bila dipakai (±5–9 MB per file, tersimpan di cache browser).
+      </p>
       {d.slots.map((s, i) => {
-        const family = LATIN_V1_FAMILIES.find((f) => f.family === s.font);
+        const family = findFamily(s.font);
         return (
           <fieldset key={i} style={{ border: '1px solid var(--vk-border)', borderRadius: 10, marginTop: 12, padding: 10 }}>
             <legend className={styles.muted}>Baris {i + 1}</legend>
@@ -37,7 +41,12 @@ export default function DesignPanel({ project }: { project: SubtitleVideoProject
               </label>
               <label className={styles.field}>Font
                 <select value={s.font} onChange={(e) => updateSlot(i, { font: e.target.value })}>
-                  {LATIN_V1_FAMILIES.map((f) => <option key={f.family} value={f.family}>{f.family}</option>)}
+                  <optgroup label="Latin">
+                    {FONT_FAMILIES.filter((f) => !f.cjk).map((f) => <option key={f.family} value={f.family}>{f.label}</option>)}
+                  </optgroup>
+                  <optgroup label="Korea / Jepang / Mandarin">
+                    {FONT_FAMILIES.filter((f) => f.cjk).map((f) => <option key={f.family} value={f.family}>{f.label}</option>)}
+                  </optgroup>
                 </select>
               </label>
               <label className={styles.field}>Ukuran
@@ -54,8 +63,8 @@ export default function DesignPanel({ project }: { project: SubtitleVideoProject
               </label>
             </div>
             <div className={styles.row} style={{ marginTop: 8 }}>
-              <label className={styles.check}><input type="checkbox" checked={s.bold} disabled={!family?.bold} onChange={(e) => updateSlot(i, { bold: e.target.checked })} />Tebal</label>
-              <label className={styles.check}><input type="checkbox" checked={s.italic} disabled={!family?.italic} onChange={(e) => updateSlot(i, { italic: e.target.checked })} />Miring</label>
+              <label className={styles.check}><input type="checkbox" checked={s.bold} disabled={!family?.files.bold} onChange={(e) => updateSlot(i, { bold: e.target.checked })} />Tebal</label>
+              <label className={styles.check}><input type="checkbox" checked={s.italic} disabled={!family?.files.italic} onChange={(e) => updateSlot(i, { italic: e.target.checked })} />Miring</label>
               <label className={styles.check}><input type="checkbox" checked={s.box} onChange={(e) => updateSlot(i, { box: e.target.checked })} />Kotak latar</label>
               {s.box && (
                 <>

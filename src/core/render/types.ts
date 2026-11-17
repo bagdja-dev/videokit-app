@@ -89,7 +89,7 @@ export type RenderSource = Blob | string;
 export type RenderSources = Record<string, RenderSource>;
 
 export interface RenderProgress {
-  stage: 'preparing' | 'subtitles' | 'audio' | 'video' | 'finalizing' | 'done';
+  stage: 'preparing' | 'fonts' | 'subtitles' | 'audio' | 'video' | 'finalizing' | 'done';
   /** 0..1 */
   progress: number;
   frame?: number;

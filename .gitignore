@@ -13,3 +13,6 @@ e2e-output/
 
 # sertifikat dev lokal (npm run dev:https)
 certs/
+
+# paket font CJK (±36 MB) — diunduh oleh npm run vendor (scripts/fetch-fonts-cjk.mjs)
+public/fonts/cjk-v1/

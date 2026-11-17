@@ -3,7 +3,7 @@
 // freeze frame terakhir, amplop ducking sama.
 // Pakai: node scripts/render-reference.mjs <spec.json> <out.mp4>   (path input = url relatif ke public/)
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const FF = process.env.FFMPEG ?? (existsSync('/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg') ? '/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg' : 'ffmpeg');
@@ -68,7 +68,17 @@ if (spec.background) {
   filters.push(`[${base}][${L}t]overlay=0:0:format=auto:eof_action=pass:enable='between(t,${st},${(seg.end_ms / 1000 - 0.0001).toFixed(4)})'[c${i}]`);
   base = `c${i}`;
 });
-const subs = spec.subtitles ? `ass=${pathOf(spec.subtitles.input)}:fontsdir=public/fonts/latin-v1,` : '';
+// fontsdir ffmpeg hanya satu folder → gabungkan paket font sesuai font_set (latin-v1 / latin-cjk-v1).
+const fontsDir = () => {
+  const dir = 'e2e-output/fonts-' + spec.subtitles.font_set;
+  mkdirSync(dir, { recursive: true });
+  const sets = spec.subtitles.font_set === 'latin-cjk-v1' ? ['latin-v1', 'cjk-v1'] : ['latin-v1'];
+  for (const set of sets) for (const f of readdirSync(join('public/fonts', set))) {
+    if (/\.(ttf|otf)$/.test(f) && !existsSync(join(dir, f))) copyFileSync(join('public/fonts', set, f), join(dir, f));
+  }
+  return dir;
+};
+const subs = spec.subtitles ? `ass=${pathOf(spec.subtitles.input)}:fontsdir=${fontsDir()},` : '';
 filters.push(`[${base}]trim=duration=${DUR},format=gbrp,${subs}scale=out_color_matrix=bt709:out_range=tv,format=yuv420p[vout]`);
 
 // Audio — amplop latar identik dengan src/core/render/envelope.ts; boleh lebih dari satu track latar
