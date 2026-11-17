@@ -1,12 +1,23 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useSession } from '@/core/auth/session';
+import { bindStorageToUser } from '../storage';
 import Editor from './Editor';
 import ProjectList from './ProjectList';
 
 /** Pengatur tampilan: daftar project atau editor (?id=…). Static export → navigasi lewat query string. */
 export default function SubtitleVideoApp() {
   const [projectId, setProjectId] = useState<string | null | undefined>(undefined);
+  const userId = useSession((s) => s.user?.userId);
+  const [boundTo, setBoundTo] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    let alive = true;
+    void bindStorageToUser(userId).finally(() => { if (alive) setBoundTo(userId); });
+    return () => { alive = false; };
+  }, [userId]);
 
   useEffect(() => {
     const read = () => setProjectId(new URLSearchParams(location.search).get('id'));
@@ -21,6 +32,6 @@ export default function SubtitleVideoApp() {
     setProjectId(id);
   }, []);
 
-  if (projectId === undefined) return null;
+  if (projectId === undefined || !userId || boundTo !== userId) return null;
   return projectId ? <Editor projectId={projectId} onBack={() => open(null)} /> : <ProjectList onOpen={open} />;
 }

@@ -1,0 +1,64 @@
+.header {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--vk-surface) 92%, transparent);
+  backdrop-filter: saturate(1.4) blur(8px);
+  border-bottom: 1px solid var(--vk-border);
+}
+.inner {
+  max-width: 1280px; margin: 0 auto; height: 56px; padding: 0 16px;
+  display: grid; grid-template-columns: 1fr minmax(0, auto) 1fr; align-items: center; gap: 12px;
+}
+
+.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--vk-text); text-decoration: none; justify-self: start; min-width: 0; }
+.logo { flex: none; }
+.brandText { display: flex; flex-direction: column; line-height: 1.1; }
+.brandText strong { font-size: 16px; letter-spacing: -0.01em; }
+.brandBy { font-size: 11px; color: var(--vk-muted); }
+
+.center { min-width: 0; text-align: center; }
+.appName {
+  display: inline-block; max-width: 100%; padding: 4px 12px; border-radius: 999px;
+  background: var(--vk-primary-soft); color: var(--vk-primary); font-weight: 600; font-size: 14px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;
+}
+
+.right { justify-self: end; display: flex; align-items: center; }
+.loginBtn { min-height: 36px; padding: 0 14px; text-decoration: none; }
+.skeleton { width: 32px; height: 32px; border-radius: 50%; background: var(--vk-primary-soft); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.5; } }
+
+.profile { position: relative; }
+.profileButton {
+  display: inline-flex; align-items: center; gap: 8px; padding: 4px 8px 4px 4px; min-height: 40px;
+  border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--vk-text); font: inherit; cursor: pointer;
+}
+.profileButton:hover, .profileButton[aria-expanded='true'] { border-color: var(--vk-border); background: var(--vk-primary-soft); }
+.profileName { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 14px; }
+.caret { color: var(--vk-muted); }
+.avatar { border-radius: 50%; object-fit: cover; flex: none; }
+.avatarInitial {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; border-radius: 50%;
+  background: var(--vk-primary); color: var(--vk-on-primary); font-weight: 700; font-size: 14px;
+}
+
+.menu {
+  position: absolute; right: 0; top: calc(100% + 6px); width: min(280px, calc(100vw - 32px));
+  background: var(--vk-surface); border: 1px solid var(--vk-border); border-radius: 12px; padding: 6px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.16);
+}
+.menuHead { display: flex; gap: 10px; align-items: center; padding: 8px 8px 10px; border-bottom: 1px solid var(--vk-border); margin-bottom: 4px; }
+.menuWho { display: flex; flex-direction: column; min-width: 0; }
+.menuWho strong, .menuEmail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menuEmail { font-size: 13px; color: var(--vk-muted); }
+.menuItem { display: block; padding: 10px 8px; border-radius: 8px; color: var(--vk-text); text-decoration: none; font-size: 14px; }
+.menuItem:hover, .menuItem:focus-visible { background: var(--vk-primary-soft); outline: none; }
+
+@media (max-width: 640px) {
+  .brandBy, .profileName, .caret { display: none; }
+  .profileButton { padding: 4px; }
+  .inner { gap: 8px; }
+  .appName { font-size: 13px; padding: 4px 10px; }
+}
+@media (max-width: 380px) {
+  .brandText { display: none; }
+}

@@ -6,6 +6,7 @@ import { createReadStream, existsSync, mkdirSync, mkdtempSync, readFileSync, sta
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { extname, join, normalize } from 'node:path';
+import { mockApiBuildEnv, startMockAuthApi } from './lib/mock-auth-api.mjs';
 
 const FF = process.env.FFMPEG ?? (existsSync('/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg') ? '/opt/homebrew/opt/ffmpeg-full/bin/ffmpeg' : 'ffmpeg');
 const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -15,7 +16,7 @@ const OUT = 'e2e-output';
 mkdirSync(OUT, { recursive: true });
 
 if (!existsSync('public/dev-samples/spec.json')) execFileSync('node', ['scripts/make-dev-samples.mjs'], { stdio: 'inherit' });
-if (!process.env.SKIP_BUILD) execFileSync('npm', ['run', 'build'], { stdio: 'inherit' });
+if (!process.env.SKIP_BUILD) execFileSync('npm', ['run', 'build'], { stdio: 'inherit', env: mockApiBuildEnv() });
 // SKIP_REFERENCE=1: hanya ukur executor browser (mis. uji ketahanan 10 menit).
 if (!process.env.SKIP_REFERENCE) execFileSync('node', ['scripts/render-reference.mjs', 'public/dev-samples/spec.json', `${OUT}/reference.mp4`], { stdio: 'inherit' });
 
@@ -50,6 +51,8 @@ const server = createServer(async (req, res) => {
   createReadStream(p).pipe(res);
 });
 await new Promise((ok) => server.listen(PORT, ok));
+// Render Lab berada di balik login → API tiruan yang selalu login.
+const mockApi = await startMockAuthApi({ mode: 'always', appOrigin: `http://localhost:${PORT}` });
 const profile = mkdtempSync(join(process.env.TMPDIR ?? tmpdir(), 'vk-e2e-'));
 const chrome = spawn(CHROME, ['--headless=new', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check',
   `http://localhost:${PORT}/dev/render-lab/?auto=1${process.env.E2E_QS ? '&' + process.env.E2E_QS : ''}`], { stdio: 'ignore' });
@@ -58,6 +61,7 @@ const report = await reportP;
 clearTimeout(timer);
 chrome.kill();
 server.close();
+mockApi.server.close();
 if (!report.ok) { console.error('Render browser gagal:', report.error); process.exit(1); }
 if (process.env.SKIP_REFERENCE) {
   const r = { pass: true, reference: 'dilewati', browser: report.stats, jsHeapMB: report.jsHeapMB, userAgent: report.userAgent };

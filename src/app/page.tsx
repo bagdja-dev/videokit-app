@@ -1,44 +1,25 @@
 import Link from 'next/link';
+import AuthErrorNotice from '@/components/AuthErrorNotice';
+import { TOOLS } from '@/features/registry';
 import styles from './page.module.css';
 
-interface ToolCard {
-  title: string;
-  description: string;
-  /** Rute tool; tanpa href berarti belum tersedia. */
-  href?: string;
-  badge: string;
-}
-
-// Halaman kartu tool (VideoKit overview §1).
-const TOOLS: ToolCard[] = [
-  { title: 'Video dari Subtitle', description: 'Unggah SRT, isi tiap baris dengan klip atau gambar, atur gaya teks per bahasa.', href: '/subtitle-video/', badge: 'Buka' },
-  { title: 'Render Lab', description: 'Uji mesin render di browser memakai video contoh. Halaman internal tim.', href: '/dev/render-lab/', badge: 'Internal' },
-];
-
+// Halaman kartu tool (VideoKit overview §1). Publik (terindeks); membuka tool meminta login Bagdja.
 export default function HomePage() {
   return (
     <main className="vk-container">
+      <AuthErrorNotice />
       <header className={styles.header}>
         <h1 className={styles.title}>VideoKit</h1>
-        <p className="vk-muted">Racik video vertikal &amp; YouTube tanpa ribet ngedit.</p>
+        <p className="vk-muted">Racik video vertikal &amp; YouTube tanpa ribet ngedit. Masuk dengan akun Bagdja untuk memakai tool.</p>
       </header>
       <section className={styles.grid} aria-label="Daftar tool">
-        {TOOLS.map((t) => {
-          const body = (
-            <>
-              <h2 className={styles.cardTitle}>{t.title}</h2>
-              <p className="vk-muted">{t.description}</p>
-              <span className={styles.badge}>{t.badge}</span>
-            </>
-          );
-          return t.href ? (
-            <Link key={t.title} href={t.href} className={`vk-card ${styles.card} ${styles.cardLink}`}>{body}</Link>
-          ) : (
-            <article key={t.title} className={`vk-card ${styles.card} ${styles.cardDisabled}`} title="Belum tersedia">
-              {body}
-            </article>
-          );
-        })}
+        {TOOLS.map((t) => (
+          <Link key={t.id} href={t.href} className={`vk-card ${styles.card} ${styles.cardLink}`}>
+            <h2 className={styles.cardTitle}>{t.name}</h2>
+            <p className="vk-muted">{t.description}</p>
+            <span className={styles.badge}>{t.badge}</span>
+          </Link>
+        ))}
       </section>
     </main>
   );

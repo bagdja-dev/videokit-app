@@ -6,6 +6,7 @@ import { createReadStream, existsSync, mkdirSync, mkdtempSync, statSync, writeFi
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { extname, join, normalize, resolve } from 'node:path';
+import { MOCK_USER, mockApiBuildEnv, startMockAuthApi } from './lib/mock-auth-api.mjs';
 
 const FP = existsSync('/opt/homebrew/opt/ffmpeg-full/bin/ffprobe') ? '/opt/homebrew/opt/ffmpeg-full/bin/ffprobe' : 'ffprobe';
 const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -13,7 +14,7 @@ const PORT = 8790, DEBUG = 9555;
 const OUT = 'e2e-output';
 mkdirSync(OUT, { recursive: true });
 if (!existsSync('public/dev-samples/clip_land.mp4')) execFileSync('node', ['scripts/make-dev-samples.mjs'], { stdio: 'inherit' });
-if (!process.env.SKIP_BUILD) execFileSync('npm', ['run', 'build'], { stdio: 'inherit' });
+if (!process.env.SKIP_BUILD) execFileSync('npm', ['run', 'build'], { stdio: 'inherit', env: mockApiBuildEnv() });
 const sample = (f) => resolve('public/dev-samples', f);
 const srtPath = resolve('scripts/lib/sample.srt');
 
@@ -30,9 +31,10 @@ const server = createServer((req, res) => {
   createReadStream(p).pipe(res);
 });
 await new Promise((ok) => server.listen(PORT, ok));
+const mockApi = await startMockAuthApi({ mode: 'flow', appOrigin: `http://localhost:${PORT}` });
 const profile = mkdtempSync(join(process.env.TMPDIR ?? tmpdir(), 'vk-ed-'));
 const chrome = spawn(CHROME, ['--headless=new', `--user-data-dir=${profile}`, `--remote-debugging-port=${DEBUG}`, '--no-first-run', 'about:blank'], { stdio: 'ignore' });
-const fail = (m) => { console.error('GAGAL:', m); chrome.kill(); server.close(); process.exit(1); };
+const fail = (m) => { console.error('GAGAL:', m); chrome.kill(); server.close(); mockApi.server.close(); process.exit(1); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // --- CDP
@@ -66,7 +68,15 @@ const setFile = async (selector, file) => {
 const step = (m) => console.log(`• ${m}`);
 
 await cdp('Page.enable'); await cdp('DOM.enable'); await cdp('Runtime.enable');
+step('beranda publik: header tampil, belum login → tombol Masuk');
+await cdp('Page.navigate', { url: `http://localhost:${PORT}/` });
+await waitFor(`!!document.querySelector('header a[href*="/auth/login"]') && document.body.innerText.includes('Video dari Subtitle')`, 'beranda + tombol Masuk');
+step('buka tool tanpa login → dialihkan ke login → kembali ke tool');
 await cdp('Page.navigate', { url: `http://localhost:${PORT}/subtitle-video/` });
+await waitFor(`location.pathname === '/subtitle-video/' && document.body.innerText.includes(${JSON.stringify(MOCK_USER.username)})`, 'kembali dari login, profil di header', 20_000);
+if (mockApi.stats.logins !== 1) fail(`login dipanggil ${mockApi.stats.logins}× (harus 1)`);
+const headerApp = await ev(`[...document.querySelectorAll('header span')].map(s=>s.textContent).includes('Video dari Subtitle')`);
+if (!headerApp) fail('nama app aktif tidak tampil di tengah header');
 await waitFor(`!!document.querySelector('button') && [...document.querySelectorAll('button')].some(b=>b.textContent.includes('Buat'))`, 'halaman daftar project');
 step('buat project 9:16');
 await click('Buat & buka');
@@ -132,5 +142,10 @@ const probe = JSON.parse(execFileSync(FP, ['-v', 'error', '-show_entries', 'stre
 const v = probe.streams.find((s) => s.width), a = probe.streams.find((s) => !s.width);
 const result = { pass: v?.codec_name === 'h264' && v.width === 1080 && v.height === 1920 && a?.codec_name === 'aac' && Math.abs(+probe.format.duration - 30) < 0.2, renderSeconds: +renderSec, video: v, audio: a, duration: +probe.format.duration };
 console.log(JSON.stringify(result, null, 2));
-chrome.kill(); server.close();
+step('logout dari menu profil');
+await ev(`document.querySelector('header button[aria-haspopup="menu"]').click()`);
+await sleep(200);
+await ev(`[...document.querySelectorAll('[role=menuitem]')].find(a=>a.textContent==='Keluar').click()`);
+await waitFor(`location.pathname === '/' && !!document.querySelector('header a[href*="/auth/login"]')`, 'kembali ke beranda sebagai tamu');
+chrome.kill(); server.close(); mockApi.server.close();
 process.exit(result.pass ? 0 : 1);

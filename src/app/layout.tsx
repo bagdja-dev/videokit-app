@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import Script from 'next/script';
 import { BOOT_DIAG } from '@/components/boot-diagnostics';
+import AppHeader from '@/components/AppHeader';
 import HydrationMark from '@/components/HydrationMark';
 import './globals.css';
 
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body suppressHydrationWarning>
         <Script id="vk-boot-diag" strategy="beforeInteractive">{BOOT_DIAG}</Script>
         <HydrationMark />
+        <AppHeader />
         {children}
       </body>
     </html>

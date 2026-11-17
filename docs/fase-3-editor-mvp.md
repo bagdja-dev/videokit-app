@@ -33,11 +33,28 @@ detik 0; cue tanpa visual → video latar, atau warna latar bila tidak ada.
 Batasan: Mandarin tradisional memakai SC (sebagian besar huruf tersedia, bentuk glif gaya daratan); font Noto tanpa
 varian miring (libass memiringkan sintetis); Big5 yang juga valid sebagai GB18030 terbaca sebagai GB18030 (ada peringatan).
 
+## Login Bagdja & header (18 Nov 2026)
+
+Produk akan dibuka di internet, jadi fitur hanya bisa dipakai setelah login SSO Bagdja.
+
+| Aspek | Keputusan |
+|---|---|
+| Arsitektur | BFF di **`bagdja-videokit-api`** (repo baru). Penukaran code → token dengan `client_secret` + PKCE, token disimpan di cookie httpOnly milik API. App tetap statis dan tidak pernah memegang token |
+| Header | Kiri: logo + "VideoKit by Bagdja" (ke beranda). Tengah: nama tool aktif (dari `features/registry.ts`). Kanan: tombol **Masuk**, atau avatar + menu (nama, email, Ganti akun, Keluar). Responsif: di layar kecil hanya logo, nama tool, avatar |
+| Akses | Beranda publik (SEO). Halaman tool (`/subtitle-video/`, `/dev/render-lab/`) dibungkus `RequireAuth`: belum login → dialihkan ke SSO lalu kembali ke halaman yang sama |
+| Sesi habis | Header kembali menampilkan "Masuk"; halaman yang sedang dipakai **tidak** dialihkan paksa, jadi pekerjaan tidak hilang |
+| Data lokal | IndexedDB per akun (`videokit-u-<userId>`), sehingga perangkat bersama tidak menampilkan project akun lain. Data MVP sebelum login diadopsi akun pertama yang login (disalin dulu, baru database lama dihapus) |
+| Konfigurasi | `NEXT_PUBLIC_VIDEOKIT_API_URL` saat build produksi. Di development default host app port 5031, termasuk lewat IP LAN |
+| Uji | `scripts/lib/mock-auth-api.mjs` meniru kontrak API. `e2e:editor` kini menguji beranda tamu → buka tool → login → kembali → render → logout |
+
 ## Struktur
 
 ```
 src/core/subtitle/        srt.ts (parser + ekspor + deteksi encoding), ass.ts (generator ASS), cjk.ts (font cadangan + pemotongan baris CJK)
 src/core/render/fonts.ts  registri font (latin-v1, cjk-v1) + fontsForAss
+src/core/auth/session.ts  sesi SSO (Zustand) via videokit-api /auth/me
+src/components/           AppHeader, RequireAuth, AuthErrorNotice
+src/features/registry.ts  daftar tool (kartu beranda + nama app di header)
 src/features/subtitle-video/
   model.ts                dokumen project (schemaVersion 1), preset, batas
   spec-builder.ts         dokumen → Render Spec v1 + ASS (termasuk rentang pratinjau & skala)
@@ -59,6 +76,6 @@ src/app/subtitle-video/   rute /subtitle-video/ (?id=… membuka editor)
 
 ## Batasan MVP
 
-- Project & media hanya di browser/perangkat ini (belum login, belum sinkron, belum riwayat cloud).
+- Project & media hanya di browser/perangkat ini, terpisah per akun (belum sinkron, belum riwayat cloud).
 - Pratinjau dimulai dari awal audio cue walau rentang dimulai di tengah cue.
 - Belum ada timeline grafis (daftar cue vertikal), belum ada panduan safe area, belum ada preset desain tersimpan.
