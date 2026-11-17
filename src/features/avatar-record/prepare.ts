@@ -1,6 +1,6 @@
 // Pemeriksaan & persiapan file .vrm DI BROWSER sebelum diunggah (server hanya memeriksa header GLB):
 // bisa dimuat three-vrm, kerangka humanoid, ekspresi, metadata lisensi, thumbnail, SHA-256.
-import { AvatarScene, type AvatarInfo } from '@/core/avatar/avatar-scene';
+import { AvatarScene, type AvatarInfo, type FramingAdjust } from '@/core/avatar/avatar-scene';
 import { NO_CALIBRATION, mapToPose } from '@/core/avatar/rig';
 
 export const VRM_MAX_BYTES = 50 * 1024 * 1024;
@@ -21,10 +21,10 @@ export async function sha256Hex(buf: ArrayBuffer): Promise<string> {
   return Array.from(new Uint8Array(d), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** Gambar thumbnail dada-ke-atas (latar transparan) dari avatar yang sudah dimuat. */
-async function renderThumbnail(bytes: ArrayBuffer): Promise<{ info: AvatarInfo; thumbnail: Blob }> {
+/** Gambar thumbnail dada-ke-atas (latar transparan) dengan bingkai yang sama dengan pratinjau/render. */
+export async function renderThumbnail(bytes: ArrayBuffer, adjust?: FramingAdjust): Promise<{ info: AvatarInfo; thumbnail: Blob }> {
   const canvas = new OffscreenCanvas(THUMB_W, THUMB_H);
-  const scene = new AvatarScene(canvas, { width: THUMB_W, height: THUMB_H, background: null, framing: 'bust' });
+  const scene = new AvatarScene(canvas, { width: THUMB_W, height: THUMB_H, background: null, framing: 'bust', adjust });
   try {
     const info = await scene.load(bytes.slice(0));
     const pose = mapToPose(() => 0, NO_CALIBRATION, { mirror: true });

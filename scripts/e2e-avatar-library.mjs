@@ -13,7 +13,7 @@ const PORT = 8793, DEBUG = 9577, OUT = 'e2e-output';
 mkdirSync(OUT, { recursive: true });
 if (!existsSync('public/dev-samples/avatar/Seed-san.vrm')) execFileSync('node', ['scripts/vendor-mediapipe.mjs'], { stdio: 'inherit' });
 if (!process.env.SKIP_BUILD) execFileSync('npm', ['run', 'build'], { stdio: 'inherit', env: mockApiBuildEnv() });
-const VRM = resolve('public/dev-samples/avatar/Seed-san.vrm');
+const VRM = resolve(process.env.VRM ?? 'public/dev-samples/avatar/Seed-san.vrm');
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.wasm': 'application/wasm', '.task': 'application/octet-stream' };
 const server = createServer((req, res) => {
@@ -81,12 +81,31 @@ check('lisensi dari metadata VRM tampil', /Komersial OK|Non-komersial|Lisensi/.t
 check('thumbnail tampil (CORS + COEP)', await waitFor(`(()=>{const i=document.querySelector('[data-avatar="Seed Satu"] img');return !!i && i.complete && i.naturalWidth>0;})()`, 'thumbnail', 10_000));
 check('pratinjau avatar ter-render', await waitFor(`${previewPixels} > 0.05`, 'pratinjau', 30_000), `${((await ev(previewPixels)) * 100).toFixed(0)}% piksel`);
 const sent = [...api.avatars.values()][0];
-check('API menerima sha256 + versi VRM + persetujuan', /^[0-9a-f]{64}$/.test(sent.sha256) && sent.vrm_version === '1' && sent.license_accepted === true && sent.thumbnail_mime_type === 'image/webp');
+check('API menerima sha256 + versi VRM + persetujuan', /^[0-9a-f]{64}$/.test(sent.sha256) && (process.env.VRM ? ['0', '1'].includes(sent.vrm_version) : sent.vrm_version === '1') && sent.license_accepted === true && sent.thumbnail_mime_type === 'image/webp');
 await shot('avatar-library-desktop', 1280, 900);
+
+// bingkai manual: buka panel, geser zoom & naik/turun, simpan → tersimpan di server + thumbnail diganti
+const setRange = (label, v) => ev(`(()=>{const i=document.querySelector('[data-role="framing-panel"] input[aria-label=${JSON.stringify(label)}]');const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(i,'${v}');i.dispatchEvent(new Event('input',{bubbles:true}));i.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+const pixelsBefore = await ev(previewPixels);
+await ev(`[...document.querySelectorAll('button')].find(b=>b.textContent==='Atur bingkai').click()`);
+await waitFor(`!!document.querySelector('[data-role="framing-panel"]')`, 'panel bingkai', 5000);
+const thumbSrcBefore = await ev(`document.querySelector('[data-avatar="Seed Satu"] img').src`);
+await setRange('Perbesar', '1.6');
+await setRange('Naik / turun', '0.08');
+await sleep(500);
+const pixelsZoom = await ev(previewPixels);
+check('slider bingkai langsung mengubah pratinjau', Math.abs(pixelsZoom - pixelsBefore) > 0.02, `${(pixelsBefore * 100).toFixed(0)}% → ${(pixelsZoom * 100).toFixed(0)}% piksel terisi`);
+await ev(`[...document.querySelectorAll('button')].find(b=>b.textContent==='Simpan bingkai').click()`);
+check('simpan bingkai → server + thumbnail baru', await waitFor(`[...document.querySelectorAll('button')].find(b=>b.textContent==='Simpan bingkai')?.disabled && document.querySelector('[data-avatar="Seed Satu"] img')?.src !== ${JSON.stringify(thumbSrcBefore)}`, 'simpan bingkai', 20_000)
+  && [...api.avatars.values()][0].framing?.zoom === 1.6 && api.stats.thumbnailReplacements === 1);
+await shot('avatar-framing-desktop', 1280, 1000);
+await cdp('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
 
 const downloadsBefore = api.stats.vrmDownloads;
 await cdp('Page.reload', {});
 check('reload: avatar tetap ada (server) & pratinjau dari cache perangkat', await waitFor(`!!document.querySelector('[data-avatar="Seed Satu"]') && ${previewPixels} > 0.05`, 'reload', 30_000) && api.stats.vrmDownloads === downloadsBefore, `unduhan VRM: ${api.stats.vrmDownloads - downloadsBefore}`);
+await ev(`[...document.querySelectorAll('button')].find(b=>b.textContent==='Atur bingkai').click()`);
+check('bingkai tersimpan setelah reload', await waitFor(`document.querySelector('[data-role="framing-panel"] input[aria-label="Perbesar"]')?.value === '1.6'`, 'nilai bingkai', 5000));
 
 check('unggah avatar 2', await upload('Seed Dua'));
 check('slot penuh 2/2: tombol unggah hilang + catatan premium', await waitFor(`document.querySelector('[data-role="avatar-quota"]')?.innerText==='2/2 slot' && ![...document.querySelectorAll('button')].some(b=>b.textContent.includes('Unggah avatar .vrm')) && document.body.innerText.includes('slot tambahan (premium)')`, 'slot penuh'));

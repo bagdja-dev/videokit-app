@@ -3,7 +3,7 @@
 // Pratinjau avatar langsung: kamera → Face Landmarker → rig → AvatarScene. Tanpa kamera, avatar diputar dengan gerak
 // sintetis agar terlihat hidup. Gambar kamera tidak disimpan/dikirim.
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
-import { AvatarScene } from '@/core/avatar/avatar-scene';
+import { AvatarScene, NO_FRAMING_ADJUST, type FramingAdjust } from '@/core/avatar/avatar-scene';
 import { parseMotionTrack, sampleMotion } from '@/core/avatar/motion-track';
 import { mapToPose, NO_CALIBRATION, PoseSmoother, quatToEulerYXZ, type Calibration } from '@/core/avatar/rig';
 import { syntheticMotion } from '@/core/avatar/synthetic';
@@ -35,7 +35,7 @@ export interface LiveAvatar {
   calibrate: () => boolean;
 }
 
-export function useLiveAvatar(canvasRef: RefObject<HTMLCanvasElement | null>, videoRef: RefObject<HTMLVideoElement | null>, bytes: ArrayBuffer | null): LiveAvatar {
+export function useLiveAvatar(canvasRef: RefObject<HTMLCanvasElement | null>, videoRef: RefObject<HTMLVideoElement | null>, bytes: ArrayBuffer | null, adjust: FramingAdjust = NO_FRAMING_ADJUST): LiveAvatar {
   const sceneRef = useRef<AvatarScene | null>(null);
   const trackerRef = useRef<FaceTracker | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -66,6 +66,9 @@ export function useLiveAvatar(canvasRef: RefObject<HTMLCanvasElement | null>, vi
       .catch((e: unknown) => { if (alive) setError(`Avatar tidak bisa dimuat: ${String(e)}`); });
     return () => { alive = false; };
   }, [bytes]);
+
+  // Bingkai manual: diterapkan langsung (juga setelah avatar selesai dimuat).
+  useEffect(() => { sceneRef.current?.setAdjust(adjust); }, [adjust, loadedVersion]);
 
   useEffect(() => {
     let raf = 0, lastVideoTime = -1, last = performance.now(), windowStart = last, nTrack = 0, nRender = 0, found = false;

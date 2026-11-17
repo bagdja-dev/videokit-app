@@ -2,13 +2,17 @@
 // akhir (compositor worker, OffscreenCanvas) — pose & langkah fisika (spring bone) dengan dt tetap → deterministik.
 import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm';
 import {
-  AmbientLight, Color, DirectionalLight, PerspectiveCamera, Scene, SRGBColorSpace, Vector3, WebGLRenderer,
+  AmbientLight, Box3, Color, DirectionalLight, PerspectiveCamera, Scene, SRGBColorSpace, Vector3, WebGLRenderer,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { RigPose, VrmExpression } from './rig';
 import { VRM_EXPRESSIONS } from './rig';
 
 export type Framing = 'bust' | 'head';
+
+/** Penyesuaian bingkai manual per avatar (relatif tinggi avatar). zoom 1 = otomatis. */
+export interface FramingAdjust { zoom: number; offset_x: number; offset_y: number }
+export const NO_FRAMING_ADJUST: FramingAdjust = { zoom: 1, offset_x: 0, offset_y: 0 };
 
 export interface AvatarInfo {
   name: string;
@@ -27,6 +31,7 @@ export interface AvatarSceneOptions {
   /** null = transparan (ditumpuk di atas video). */
   background?: string | null;
   framing?: Framing;
+  adjust?: FramingAdjust;
 }
 
 const REQUIRED: VrmExpression[] = ['aa', 'blinkLeft', 'blinkRight'];
@@ -62,10 +67,12 @@ export class AvatarScene {
   private readonly camera: PerspectiveCamera;
   private vrm: VRM | null = null;
   private framing: Framing;
+  private adjust: FramingAdjust;
   private elapsed = 0;
 
   constructor(readonly canvas: HTMLCanvasElement | OffscreenCanvas, opts: AvatarSceneOptions) {
     this.framing = opts.framing ?? 'bust';
+    this.adjust = opts.adjust ?? NO_FRAMING_ADJUST;
     this.renderer = new WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.setPixelRatio(1);
@@ -81,6 +88,12 @@ export class AvatarScene {
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+    this.frame();
+  }
+
+  /** Ubah bingkai manual (pratinjau langsung saat slider digeser). */
+  setAdjust(adjust: FramingAdjust): void {
+    this.adjust = adjust;
     this.frame();
   }
 
@@ -111,30 +124,58 @@ export class AvatarScene {
     return readInfo(vrm);
   }
 
-  /** Lengan turun (VRM default T-pose) + sedikit tekuk siku. */
-  private restPose(): void {
-    const h = this.vrm?.humanoid;
-    if (!h) return;
-    const set = (bone: Parameters<typeof h.getNormalizedBoneNode>[0], x: number, y: number, z: number) => {
-      const n = h.getNormalizedBoneNode(bone);
-      if (n) n.rotation.set(x, y, z);
-    };
-    set('leftUpperArm', 0, 0, -1.2);
-    set('rightUpperArm', 0, 0, 1.2);
-    set('leftLowerArm', 0, -0.25, 0);
-    set('rightLowerArm', 0, 0.25, 0);
+  /**
+   * Set rotasi tulang ter-normalisasi dengan konvensi VRM 1.0 (avatar menghadap +Z). VRM 0.x menghadap −Z di ruang
+   * tulangnya, sehingga sumbu X dan Z terbalik — tanpa koreksi ini lengan VRM 0.x terangkat ke atas dan anggukan
+   * kepala terbalik (pola yang sama dipakai contoh animasi three-vrm).
+   */
+  private setBone(bone: Parameters<VRM['humanoid']['getNormalizedBoneNode']>[0], x: number, y: number, z: number): void {
+    const n = this.vrm?.humanoid.getNormalizedBoneNode(bone);
+    if (!n) return;
+    const s = this.isVrm0 ? -1 : 1;
+    n.rotation.set(x * s, y, z * s, 'YXZ');
   }
 
-  /** Kamera membingkai dada ke atas ('bust') atau kepala saja. */
+  private get isVrm0(): boolean {
+    return (this.vrm?.meta as { metaVersion?: string } | undefined)?.metaVersion === '0';
+  }
+
+  /** Lengan turun (VRM default T-pose) + sedikit tekuk siku. */
+  private restPose(): void {
+    this.setBone('leftUpperArm', 0, 0, -1.2);
+    this.setBone('rightUpperArm', 0, 0, 1.2);
+    this.setBone('leftLowerArm', 0, -0.25, 0);
+    this.setBone('rightLowerArm', 0, 0.25, 0);
+  }
+
+  /**
+   * Kamera membingkai dada ke atas ('bust') atau kepala saja — RELATIF terhadap ukuran avatar, karena VRM bisa
+   * diekspor dengan skala/proporsi berbeda (angka meter tetap memotong avatar yang lebih besar).
+   * Tinggi efektif = tinggi tulang kepala dari telapak / 0,87 (proporsi tubuh), tidak terpengaruh rambut/topi tinggi.
+   */
   private frame(): void {
-    const head = this.vrm?.humanoid?.getNormalizedBoneNode('head');
+    const vrm = this.vrm;
     const p = new Vector3(0, 1.4, 0);
-    head?.getWorldPosition(p);
-    const viewH = this.framing === 'head' ? 0.45 : 0.95;
-    const centerY = this.framing === 'head' ? p.y + 0.04 : p.y - 0.2;
+    let height = 1.6;
+    if (vrm) {
+      vrm.scene.updateMatrixWorld(true);
+      const head = vrm.humanoid.getRawBoneNode('head') ?? vrm.humanoid.getNormalizedBoneNode('head');
+      head?.getWorldPosition(p);
+      const box = new Box3().setFromObject(vrm.scene);
+      const floor = Number.isFinite(box.min.y) ? box.min.y : 0;
+      const h = (p.y - floor) / 0.87;
+      if (Number.isFinite(h) && h > 0.2) height = h;
+    }
+    const a = this.adjust;
+    const viewH = (this.framing === 'head' ? 0.28 * height : 0.6 * height) / Math.max(0.1, a.zoom);
+    const centerY = (this.framing === 'head' ? p.y + 0.03 * height : p.y - 0.125 * height) + a.offset_y * height;
+    p.x += a.offset_x * height;
     const dist = viewH / 2 / Math.tan((this.camera.fov * Math.PI) / 360);
-    this.camera.position.set(0, centerY + 0.02, dist);
-    this.camera.lookAt(0, centerY, 0);
+    this.camera.near = Math.max(0.01, dist * 0.05);
+    this.camera.far = dist * 10 + height * 4;
+    this.camera.updateProjectionMatrix();
+    this.camera.position.set(p.x, centerY + 0.0125 * height, p.z + dist);
+    this.camera.lookAt(p.x, centerY, p.z);
   }
 
   /** Terapkan pose (hasil rig) — kepala 60% di tulang kepala, 40% di leher; napas idle dari waktu. */
@@ -143,16 +184,13 @@ export class AvatarScene {
     if (!vrm) return;
     const em = vrm.expressionManager;
     if (em) for (const k of VRM_EXPRESSIONS) if (em.getExpression(k)) em.setValue(k, pose.expressions[k]);
-    const h = vrm.humanoid;
     const lim = (v: number, m: number) => Math.max(-m, Math.min(m, v));
     const pitch = lim(pose.head.pitch, 0.7), yaw = lim(pose.head.yaw, 0.9), roll = lim(pose.head.roll, 0.6);
-    const neck = h.getNormalizedBoneNode('neck');
-    const headBone = h.getNormalizedBoneNode('head');
-    neck?.rotation.set(pitch * 0.4, yaw * 0.4, roll * 0.4, 'YXZ');
-    headBone?.rotation.set(pitch * 0.6, yaw * 0.6, roll * 0.6, 'YXZ');
+    this.setBone('neck', pitch * 0.4, yaw * 0.4, roll * 0.4);
+    this.setBone('head', pitch * 0.6, yaw * 0.6, roll * 0.6);
     // Tubuh atas ikut sedikit + napas.
     const breath = Math.sin((tMs / 1000) * 2 * Math.PI * 0.25) * 0.015;
-    h.getNormalizedBoneNode('spine')?.rotation.set(breath, yaw * 0.12, roll * 0.1, 'YXZ');
+    this.setBone('spine', breath, yaw * 0.12, roll * 0.1);
     if (vrm.lookAt) { vrm.lookAt.yaw = pose.eyes.yaw; vrm.lookAt.pitch = pose.eyes.pitch; }
   }
 

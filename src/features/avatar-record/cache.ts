@@ -1,5 +1,5 @@
 // Cache file .vrm per perangkat & per akun (IndexedDB). Avatar 10–50 MB cukup diunduh sekali; kunci validitas = sha256.
-import { avatarDownload, type AvatarDto } from './api';
+import { avatarDownload } from './api';
 import { sha256Hex } from './prepare';
 
 const STORE = 'files';
@@ -38,7 +38,7 @@ export async function dropCache(userId: string, id: string): Promise<void> {
  * Bytes avatar: dari cache bila sha256 cocok, selain itu unduh (URL sementara dari API), verifikasi sha256, simpan.
  * `onProgress` 0..1 saat mengunduh.
  */
-export async function loadAvatarBytes(userId: string, a: AvatarDto, onProgress?: (f: number) => void): Promise<{ bytes: ArrayBuffer; fromCache: boolean }> {
+export async function loadAvatarBytes(userId: string, a: { id: string; sha256: string }, onProgress?: (f: number) => void): Promise<{ bytes: ArrayBuffer; fromCache: boolean }> {
   const db = await open(userId).catch(() => null);
   if (db) {
     const hit = (await req(db.transaction(STORE, 'readonly').objectStore(STORE).get(a.id)).catch(() => undefined)) as Entry | undefined;

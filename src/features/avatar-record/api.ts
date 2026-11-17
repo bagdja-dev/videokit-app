@@ -3,6 +3,9 @@ import { apiUrl } from '@/core/auth/session';
 
 export type LicenseCommercial = 'allowed' | 'not_allowed' | 'unknown';
 
+/** = AvatarFramingDto di API. */
+export interface AvatarFramingDto { zoom: number; offset_x: number; offset_y: number }
+
 export interface AvatarDto {
   id: string;
   name: string;
@@ -13,12 +16,15 @@ export interface AvatarDto {
   license_commercial: LicenseCommercial;
   license_url: string | null;
   license_authors: string | null;
+  framing: AvatarFramingDto;
   thumbnail_url: string | null;
   created_at: string;
 }
 
 export interface AvatarQuotaDto { used: number; limit: number }
-export interface AvatarListResponseDto { items: AvatarDto[]; quota: AvatarQuotaDto }
+/** = PendingAvatarDto di API: unggahan belum selesai yang masih memakai slot. */
+export interface PendingAvatarDto { id: string; name: string; created_at: string; expires_at: string }
+export interface AvatarListResponseDto { items: AvatarDto[]; pending: PendingAvatarDto[]; quota: AvatarQuotaDto }
 export interface UploadTargetDto { url: string; method: 'PUT'; headers: Record<string, string>; expires_at: string }
 export interface CreateAvatarResponseDto { avatar: AvatarDto; vrm_upload: UploadTargetDto; thumbnail_upload: UploadTargetDto }
 export interface AvatarDownloadResponseDto { url: string; expires_at: string; sha256: string; size_bytes: number }
@@ -63,7 +69,10 @@ export const listAvatars = () => call<AvatarListResponseDto>('GET', '/avatars');
 export const createAvatar = (dto: CreateAvatarRequestDto) => call<CreateAvatarResponseDto>('POST', '/avatars', dto);
 export const confirmAvatar = (id: string) => call<AvatarDto>('POST', `/avatars/${id}/confirm`);
 export const avatarDownload = (id: string) => call<AvatarDownloadResponseDto>('GET', `/avatars/${id}/download`);
-export const renameAvatar = (id: string, name: string) => call<AvatarDto>('PATCH', `/avatars/${id}`, { name });
+export const updateAvatar = (id: string, body: { name?: string; framing?: AvatarFramingDto }) => call<AvatarDto>('PATCH', `/avatars/${id}`, body);
+export const renameAvatar = (id: string, name: string) => updateAvatar(id, { name });
+export const replaceThumbnail = (id: string, body: { size_bytes: number; mime_type: 'image/png' | 'image/webp' }) => call<UploadTargetDto>('POST', `/avatars/${id}/thumbnail`, body);
+export const confirmThumbnail = (id: string) => call<AvatarDto>('POST', `/avatars/${id}/thumbnail/confirm`);
 export const deleteAvatar = (id: string) => call<{ id: string; deleted: true }>('DELETE', `/avatars/${id}`);
 
 /** PUT langsung ke storage (presigned) dengan progres — XHR karena fetch belum punya progres upload. */
@@ -74,7 +83,8 @@ export function putUpload(target: UploadTargetDto, body: Blob, onProgress?: (fra
     for (const [k, v] of Object.entries(target.headers)) xhr.setRequestHeader(k, v);
     xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress?.(e.loaded / e.total); };
     xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new ApiError(xhr.status, `Upload gagal (${xhr.status})`)));
-    xhr.onerror = () => reject(new ApiError(0, 'Upload terputus — periksa koneksi'));
+    // Browser tidak memberi detail: bisa jaringan, atau CORS bucket belum mengizinkan PUT dari origin ini.
+    xhr.onerror = () => reject(new ApiError(0, 'Upload ke storage gagal — periksa koneksi. Bila berulang, CORS bucket belum mengizinkan upload dari situs ini.'));
     xhr.onabort = () => reject(new DOMException('Upload dibatalkan', 'AbortError'));
     signal?.addEventListener('abort', () => xhr.abort(), { once: true });
     xhr.send(body);

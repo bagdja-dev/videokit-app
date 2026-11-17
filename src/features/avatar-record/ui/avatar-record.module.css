@@ -56,3 +56,11 @@
   .slots { grid-template-columns: 1fr 1fr; }
   .slotEmpty { min-height: 200px; }
 }
+.framing { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--vk-border); border-radius: 10px; background: var(--vk-bg); }
+.slider { display: grid; grid-template-columns: 96px 1fr 52px; gap: 10px; align-items: center; font-size: 14px; }
+.slider input { width: 100%; accent-color: var(--vk-primary); }
+.slider output { text-align: right; font-variant-numeric: tabular-nums; color: var(--vk-muted); font-size: 13px; }
+
+.slotPending { border-style: dashed; justify-content: space-between; min-height: 160px; }
+.pendingBody { display: grid; gap: 6px; padding: 12px 10px 0; }
+.muted { color: var(--vk-muted); font-size: 13px; }

@@ -20,7 +20,7 @@ export function startMockAuthApi({ mode = 'flow', appOrigin, avatarLimit = 2 }) 
   const json = (res, code, obj) => { res.statusCode = code; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(obj)); };
   const live = () => [...avatars.values()].filter((a) => !a.deleted);
   const pub = (a) => ({ id: a.id, name: a.name, status: a.status, size_bytes: a.size_bytes, sha256: a.sha256, vrm_version: a.vrm_version, license_commercial: a.license_commercial,
-    license_url: a.license_url ?? null, license_authors: a.license_authors ?? null, thumbnail_url: a.status === 'ready' ? `${base}/r2/${a.thumb}` : null, created_at: a.created_at });
+    license_url: a.license_url ?? null, license_authors: a.license_authors ?? null, framing: a.framing ?? { zoom: 1, offset_x: 0, offset_y: 0 }, thumbnail_url: a.status === 'ready' ? `${base}/r2/${a.thumb}` : null, created_at: a.created_at });
   const target = (id, mime) => ({ url: `${base}/r2/${id}`, method: 'PUT', headers: { 'Content-Type': mime }, expires_at: new Date(Date.now() + 1800e3).toISOString() });
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
@@ -64,11 +64,12 @@ export function startMockAuthApi({ mode = 'flow', appOrigin, avatarLimit = 2 }) 
     // --- /avatars (kontrak videokit-api)
     if (url.pathname.startsWith('/avatars')) {
       if (!loggedIn) return json(res, 401, { message: 'Belum login' });
-      const m = /^\/avatars(?:\/([^/]+))?(?:\/(confirm|download))?$/.exec(url.pathname);
+      const m = /^\/avatars(?:\/([^/]+))?(?:\/(confirm|download|thumbnail|thumbnail\/confirm))?$/.exec(url.pathname);
       const id = m?.[1], action = m?.[2];
       if (!id && req.method === 'GET') {
         const items = live().filter((a) => a.status === 'ready').sort((a, b) => b.created_at.localeCompare(a.created_at)).map(pub);
-        return json(res, 200, { items, quota: { used: live().length, limit: avatarLimit } });
+        const pending = live().filter((a) => a.status === 'pending').map((a) => ({ id: a.id, name: a.name, created_at: a.created_at, expires_at: new Date(Date.parse(a.created_at) + 3600e3).toISOString() }));
+        return json(res, 200, { items, pending, quota: { used: live().length, limit: avatarLimit } });
       }
       if (!id && req.method === 'POST') {
         const b = JSON.parse((await readBody(req)).toString());
@@ -91,7 +92,27 @@ export function startMockAuthApi({ mode = 'flow', appOrigin, avatarLimit = 2 }) 
         return json(res, 200, pub(a));
       }
       if (action === 'download' && req.method === 'GET') return json(res, 200, { url: `${base}/r2/${a.vrm}`, expires_at: new Date(Date.now() + 600e3).toISOString(), sha256: a.sha256, size_bytes: a.size_bytes });
-      if (!action && req.method === 'PATCH') { a.name = JSON.parse((await readBody(req)).toString()).name; return json(res, 200, pub(a)); }
+      if (!action && req.method === 'PATCH') {
+        const b = JSON.parse((await readBody(req)).toString());
+        if (b.name !== undefined) a.name = b.name;
+        if (b.framing) a.framing = b.framing;
+        return json(res, 200, pub(a));
+      }
+      if (action === 'thumbnail' && req.method === 'POST') {
+        const b = JSON.parse((await readBody(req)).toString());
+        const t = randomUUID();
+        files.set(t, { mime: b.mime_type, body: null });
+        a.pendingThumb = t;
+        stats.thumbnailReplacements = (stats.thumbnailReplacements ?? 0) + 1;
+        return json(res, 200, target(t, b.mime_type));
+      }
+      if (action === 'thumbnail/confirm' && req.method === 'POST') {
+        if (!a.pendingThumb || !files.get(a.pendingThumb)?.body) return json(res, 409, { message: 'Thumbnail belum selesai diunggah' });
+        files.delete(a.thumb);
+        a.thumb = a.pendingThumb;
+        a.pendingThumb = null;
+        return json(res, 200, pub(a));
+      }
       if (!action && req.method === 'DELETE') { a.deleted = true; files.delete(a.vrm); files.delete(a.thumb); return json(res, 200, { id: a.id, deleted: true }); }
       return json(res, 404, { message: 'route' });
     }

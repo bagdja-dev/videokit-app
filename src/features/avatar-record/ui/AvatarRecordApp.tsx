@@ -2,30 +2,73 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from '@/core/auth/session';
-import { ApiError, deleteAvatar, listAvatars, renameAvatar, type AvatarDto, type AvatarListResponseDto } from '../api';
+import { NO_FRAMING_ADJUST, type FramingAdjust } from '@/core/avatar/avatar-scene';
+import {
+  ApiError, confirmThumbnail, deleteAvatar, listAvatars, putUpload, renameAvatar, replaceThumbnail, updateAvatar, type AvatarDto, type AvatarListResponseDto,
+} from '../api';
 import { dropCache, loadAvatarBytes } from '../cache';
+import { renderThumbnail } from '../prepare';
 import UploadDialog from './UploadDialog';
 import { useLiveAvatar } from './useLiveAvatar';
 import styles from './avatar-record.module.css';
 
 const COMMERCIAL_BADGE: Record<AvatarDto['license_commercial'], string> = { allowed: 'Komersial OK', not_allowed: 'Non-komersial', unknown: 'Lisensi ?' };
 
-function Preview({ avatar, userId }: { avatar: AvatarDto; userId: string }) {
+const sameAdjust = (a: FramingAdjust, b: FramingAdjust) => a.zoom === b.zoom && a.offset_x === b.offset_x && a.offset_y === b.offset_y;
+
+function FramingSlider({ label, value, min, max, step, onChange, format }: { label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void; format: (v: number) => string }) {
+  return (
+    <label className={styles.slider}>
+      <span>{label}</span>
+      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(+e.target.value)} aria-label={label} />
+      <output>{format(value)}</output>
+    </label>
+  );
+}
+
+function Preview({ avatar, userId, onSaved }: { avatar: AvatarDto; userId: string; onSaved: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [bytes, setBytes] = useState<ArrayBuffer | null>(null);
   // Komponen di-remount per avatar (key), jadi status awal = sedang memuat.
   const [loading, setLoading] = useState<{ progress: number } | null>({ progress: 0 });
   const [loadError, setLoadError] = useState<string | null>(null);
-  const live = useLiveAvatar(canvasRef, videoRef, bytes);
+  const saved = avatar.framing ?? NO_FRAMING_ADJUST;
+  const [adjust, setAdjust] = useState<FramingAdjust>(saved);
+  const [framingOpen, setFramingOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const live = useLiveAvatar(canvasRef, videoRef, bytes, adjust);
+  const { id: avatarId, sha256 } = avatar;
 
   useEffect(() => {
     let alive = true;
-    loadAvatarBytes(userId, avatar, (p) => { if (alive) setLoading({ progress: p }); })
+    loadAvatarBytes(userId, { id: avatarId, sha256 }, (p) => { if (alive) setLoading({ progress: p }); })
       .then((r) => { if (alive) { setBytes(r.bytes); setLoading(null); } })
       .catch((e: unknown) => { if (alive) { setLoadError(e instanceof Error ? e.message : String(e)); setLoading(null); } });
     return () => { alive = false; };
-  }, [avatar, userId]);
+  }, [avatarId, sha256, userId]);
+
+  /** Simpan bingkai ke server lalu perbarui thumbnail dengan bingkai yang sama. */
+  const saveFraming = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await updateAvatar(avatarId, { framing: adjust });
+      if (bytes) {
+        const { thumbnail } = await renderThumbnail(bytes, adjust);
+        const target = await replaceThumbnail(avatarId, { size_bytes: thumbnail.size, mime_type: thumbnail.type === 'image/webp' ? 'image/webp' : 'image/png' });
+        await putUpload(target, thumbnail);
+        await confirmThumbnail(avatarId);
+      }
+      onSaved();
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+  const dirty = !sameAdjust(adjust, saved);
 
   return (
     <section className={`vk-card ${styles.preview}`} aria-label={`Pratinjau ${avatar.name}`}>
@@ -49,7 +92,25 @@ function Preview({ avatar, userId }: { avatar: AvatarDto; userId: string }) {
           {live.calibrated ? 'Kalibrasi ulang' : 'Kalibrasi pose netral'}
         </button>
         <label className={styles.check}><input type="checkbox" checked={live.mirror} onChange={(e) => live.setMirror(e.target.checked)} /> Cermin</label>
+        <button className="vk-btn vk-btn-ghost" aria-expanded={framingOpen} onClick={() => setFramingOpen((o) => !o)}>Atur bingkai</button>
       </div>
+      {framingOpen && (
+        <div className={styles.framing} data-role="framing-panel">
+          <FramingSlider label="Perbesar" value={adjust.zoom} min={0.5} max={2.5} step={0.05} format={(v) => `${v.toFixed(2)}×`}
+            onChange={(zoom) => setAdjust((a) => ({ ...a, zoom }))} />
+          <FramingSlider label="Naik / turun" value={adjust.offset_y} min={-0.5} max={0.5} step={0.01} format={(v) => `${v > 0 ? '+' : ''}${Math.round(v * 100)}`}
+            onChange={(offset_y) => setAdjust((a) => ({ ...a, offset_y }))} />
+          <FramingSlider label="Kiri / kanan" value={adjust.offset_x} min={-0.5} max={0.5} step={0.01} format={(v) => `${v > 0 ? '+' : ''}${Math.round(v * 100)}`}
+            onChange={(offset_x) => setAdjust((a) => ({ ...a, offset_x }))} />
+          <div className={styles.row}>
+            <button className="vk-btn vk-btn-ghost" disabled={saving || sameAdjust(adjust, NO_FRAMING_ADJUST)} onClick={() => setAdjust(NO_FRAMING_ADJUST)}>Reset ke otomatis</button>
+            <button className="vk-btn vk-btn-ghost" disabled={saving || !dirty} onClick={() => setAdjust(saved)}>Batal</button>
+            <button className="vk-btn" disabled={saving || !dirty || !bytes} onClick={() => void saveFraming()}>{saving ? 'Menyimpan…' : 'Simpan bingkai'}</button>
+          </div>
+          {saveError && <p className="vk-danger" role="alert">{saveError}</p>}
+          <p className="vk-muted">Bingkai disimpan per avatar dan dipakai juga saat render video; thumbnail ikut diperbarui.</p>
+        </div>
+      )}
       <p className="vk-muted">
         {live.camOn
           ? (live.faceFound ? 'Wajah terdeteksi. Duduk santai, lihat kamera, lalu tekan Kalibrasi.' : 'Wajah belum terlihat — pastikan wajah di tengah kamera & cukup cahaya.')
@@ -90,6 +151,10 @@ export default function AvatarRecordApp() {
       await refresh();
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusyId(null); }
   };
+  const cancelPending = async (id: string) => {
+    setBusyId(id);
+    try { await deleteAvatar(id); await refresh(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); } finally { setBusyId(null); }
+  };
   const rename = async (a: AvatarDto) => {
     const name = prompt('Nama avatar', a.name)?.trim();
     if (!name || name === a.name) return;
@@ -98,7 +163,8 @@ export default function AvatarRecordApp() {
   };
 
   const full = !!data && data.quota.used >= data.quota.limit;
-  const emptySlots = data ? Math.max(0, data.quota.limit - data.items.length) : 0;
+  const pendingItems = data?.pending ?? [];
+  const emptySlots = data ? Math.max(0, data.quota.limit - data.items.length - pendingItems.length) : 0;
   const current = data?.items.find((a) => a.id === selected) ?? null;
 
   return (
@@ -133,6 +199,17 @@ export default function AvatarRecordApp() {
                 </div>
               </article>
             ))}
+            {pendingItems.map((p) => (
+              <article key={p.id} className={`${styles.slot} ${styles.slotPending}`} data-pending={p.name}>
+                <div className={styles.pendingBody}>
+                  <strong className={styles.slotName}>{p.name}</strong>
+                  <span className={styles.muted}>Unggahan belum selesai — slot bebas otomatis pukul {new Date(p.expires_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}.</span>
+                </div>
+                <div className={styles.slotActions}>
+                  <button className="vk-btn vk-btn-ghost" disabled={busyId === p.id} onClick={() => void cancelPending(p.id)}>Batalkan</button>
+                </div>
+              </article>
+            ))}
             {data && Array.from({ length: full ? 0 : emptySlots }, (_, i) => (
               <button key={`empty-${i}`} className={styles.slotEmpty} onClick={() => fileRef.current?.click()}>
                 <span className={styles.plus} aria-hidden>+</span>
@@ -146,7 +223,7 @@ export default function AvatarRecordApp() {
           <p className={styles.note}>Belum punya avatar? Buat gratis di <a href="https://vroid.com/en/studio" target="_blank" rel="noreferrer">VRoid Studio</a> lalu ekspor sebagai .vrm (maks. 50 MB).</p>
         </section>
 
-        {current && userId ? <Preview key={current.id} avatar={current} userId={userId} /> : (
+        {current && userId ? <Preview key={current.id} avatar={current} userId={userId} onSaved={() => void refresh()} /> : (
           <section className={`vk-card ${styles.previewEmpty}`}><p className="vk-muted">Unggah avatar untuk melihat pratinjau dan mencobanya dengan kamera.</p></section>
         )}
       </div>

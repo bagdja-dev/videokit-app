@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { confirmAvatar, createAvatar, putUpload, type AvatarDto } from '../api';
+import { confirmAvatar, createAvatar, deleteAvatar, putUpload, type AvatarDto } from '../api';
 import { putCache } from '../cache';
 import { prepareVrm, PrepareError, type PreparedAvatar } from '../prepare';
 import styles from './avatar-record.module.css';
@@ -37,6 +37,7 @@ export default function UploadDialog({ file, userId, onDone, onClose }: { file: 
     const ac = new AbortController();
     abortRef.current = ac;
     setPhase({ kind: 'uploading', progress: 0 });
+    let createdId: string | null = null;
     try {
       const info = prep.info;
       const created = await createAvatar({
@@ -48,6 +49,7 @@ export default function UploadDialog({ file, userId, onDone, onClose }: { file: 
         thumbnail_size_bytes: prep.thumbnail.size,
         thumbnail_mime_type: prep.thumbnail.type === 'image/webp' ? 'image/webp' : 'image/png',
       });
+      createdId = created.avatar.id;
       const total = prep.file.size + prep.thumbnail.size;
       await putUpload(created.thumbnail_upload, prep.thumbnail, undefined, ac.signal);
       await putUpload(created.vrm_upload, prep.file, (f) => setPhase({ kind: 'uploading', progress: (prep.thumbnail.size + f * prep.file.size) / total }), ac.signal);
@@ -56,6 +58,8 @@ export default function UploadDialog({ file, userId, onDone, onClose }: { file: 
       await putCache(userId, ready.id, prep.sha256, prep.file).catch(() => undefined);
       onDone(ready);
     } catch (e) {
+      // Upload gagal/dibatalkan setelah avatar terdaftar → lepaskan slot sekarang (bukan menunggu 1 jam kedaluwarsa).
+      if (createdId) await deleteAvatar(createdId).catch(() => undefined);
       if (e instanceof DOMException && e.name === 'AbortError') return;
       setPhase({ kind: 'error', message: e instanceof Error ? e.message : String(e) });
     }

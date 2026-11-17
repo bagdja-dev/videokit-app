@@ -79,6 +79,9 @@ export function validateSpec(spec: RenderSpecV1): SpecIssue[] {
     if (spec.inputs[ov.motion]?.kind !== 'motion') issues.push({ path: `${p}.motion`, message: 'Input motion track tidak ada' });
     if (!(ov.end_ms > ov.start_ms) || ov.start_ms < 0 || ov.end_ms > o.duration_ms) issues.push({ path: p, message: 'Rentang overlay di luar durasi' });
     if (!(ov.placement.width >= 0.1 && ov.placement.width <= 1)) issues.push({ path: `${p}.placement.width`, message: 'Lebar avatar harus 0.1–1' });
+    if (ov.camera && !(ov.camera.zoom >= 0.5 && ov.camera.zoom <= 2.5 && Math.abs(ov.camera.offset_x) <= 0.5 && Math.abs(ov.camera.offset_y) <= 0.5)) {
+      issues.push({ path: `${p}.camera`, message: 'Bingkai di luar batas (zoom 0.5–2.5, geser ±0.5)' });
+    }
     if (ov.background && !HEX.test(ov.background)) issues.push({ path: `${p}.background`, message: 'Warna harus #RRGGBB' });
   });
   if ((spec.overlays?.length ?? 0) > 1) issues.push({ path: 'overlays', message: 'Versi ini hanya mendukung satu avatar per video' });

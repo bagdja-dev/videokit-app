@@ -17,7 +17,7 @@ export interface AvatarOverlayRenderer {
 export async function createAvatarOverlay(ov: AvatarOverlay, vrm: ArrayBuffer, motion: ArrayBuffer, W: number, H: number, fps: number): Promise<AvatarOverlayRenderer> {
   const rect = avatarRect(ov.placement, W, H);
   const canvas = new OffscreenCanvas(rect.w, rect.h);
-  const scene = new AvatarScene(canvas, { width: rect.w, height: rect.h, background: ov.background ?? null, framing: ov.framing });
+  const scene = new AvatarScene(canvas, { width: rect.w, height: rect.h, background: ov.background ?? null, framing: ov.framing, adjust: ov.camera });
   await scene.load(vrm);
   const track = parseMotionTrack(motion);
   const buf = new Float32Array(track.header.channels.length);

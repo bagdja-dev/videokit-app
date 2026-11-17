@@ -117,4 +117,16 @@ describe('tata letak & validasi overlay', () => {
     expect(paths).toContain('overlays[0].motion');
     expect(paths).toContain('overlays');
   });
+
+  it('validateSpec membatasi bingkai manual avatar', () => {
+    const spec: RenderSpecV1 = {
+      spec_version: 1, output: { width: 1920, height: 1080, fps: 30, duration_ms: 5000, background_color: '#000000' },
+      inputs: { v: { kind: 'video' }, a: { kind: 'avatar' }, m: { kind: 'motion' } },
+      video_track: [{ input: 'v', start_ms: 0, end_ms: 5000, fit: 'contain' }], audio_tracks: [],
+      overlays: [{ type: 'avatar', input: 'a', motion: 'm', start_ms: 0, end_ms: 5000, placement: { anchor: 'bottom-right', width: 0.3 }, camera: { zoom: 1.5, offset_x: 0, offset_y: 0.1 } }],
+    };
+    expect(validateSpec(spec)).toEqual([]);
+    spec.overlays![0]!.camera = { zoom: 3, offset_x: 0, offset_y: 0 };
+    expect(validateSpec(spec).map((i) => i.path)).toContain('overlays[0].camera');
+  });
 });

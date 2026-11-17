@@ -103,6 +103,8 @@ export interface AvatarOverlay {
   /** null/undefined = transparan. */
   background?: string | null;
   framing?: 'bust' | 'head';
+  /** Bingkai manual per avatar (zoom 0.5–2.5, offset −0.5..0.5 relatif tinggi avatar). */
+  camera?: { zoom: number; offset_x: number; offset_y: number };
   mirror?: boolean;
   /** Pose netral saat kalibrasi (radian & nilai blendshape istirahat). */
   calibration?: { head: { pitch: number; yaw: number; roll: number }; rest: Record<string, number> };
