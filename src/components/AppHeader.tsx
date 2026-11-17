@@ -12,7 +12,7 @@ function Avatar({ user, size = 32 }: { user: SessionUser; size?: number }) {
   const initial = displayName(user).charAt(0).toUpperCase();
   if (user.avatar && !broken) {
     // eslint-disable-next-line @next/next/no-img-element -- avatar eksternal (Google), static export tanpa optimasi gambar
-    return <img className={styles.avatar} src={user.avatar} alt="" width={size} height={size} referrerPolicy="no-referrer" onError={() => setBroken(true)} />;
+    return <img className={styles.avatar} src={user.avatar} alt="" width={size} height={size} referrerPolicy="no-referrer" crossOrigin="anonymous" onError={() => setBroken(true)} />;
   }
   return <span className={styles.avatarInitial} style={{ width: size, height: size }} aria-hidden>{initial}</span>;
 }
