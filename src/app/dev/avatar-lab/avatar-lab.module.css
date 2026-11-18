@@ -1,0 +1,17 @@
+.title { margin: 0 0 4px; color: var(--vk-primary); }
+.h2 { margin: 0 0 8px; font-size: 17px; }
+.grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); margin-top: 16px; align-items: start; }
+.stage { position: relative; padding: 8px; }
+.preview { display: block; width: 100%; height: auto; aspect-ratio: 3 / 4; border-radius: 8px; background: #1f3b3b; }
+.cam { position: absolute; right: 16px; top: 16px; width: 28%; border-radius: 6px; transform: scaleX(-1); border: 2px solid var(--vk-surface); }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; font-size: 13px; }
+.badges span { padding: 2px 8px; border-radius: 999px; background: var(--vk-primary-soft); color: var(--vk-primary); font-weight: 600; }
+.side { display: grid; gap: 16px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.check { display: inline-flex; gap: 6px; align-items: center; }
+.list { margin: 0 0 8px; padding-left: 18px; }
+.content { width: 100%; max-height: 260px; border-radius: 8px; background: #000; }
+.result { display: grid; gap: 8px; margin-top: 12px; }
+.mono { font: 13px/1.5 ui-monospace, monospace; word-break: break-word; }
+.log { margin: 0; max-height: 220px; overflow: auto; font: 12px/1.5 ui-monospace, monospace; white-space: pre-wrap; }
+@media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }

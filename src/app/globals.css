@@ -1,0 +1,66 @@
+/* Token warna VideoKit (overview §9). Mode gelap memakai primary-on-dark agar kontras cukup. */
+:root {
+  --vk-primary: #006666;
+  --vk-primary-hover: #005252;
+  --vk-primary-soft: #e6f2f2;
+  --vk-on-primary: #ffffff;
+  --vk-bg: #f4f7f8;
+  --vk-surface: #ffffff;
+  --vk-text: #14212b;
+  --vk-muted: #5b6b78;
+  --vk-border: #d9e2e8;
+  --vk-danger: #b42318;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --vk-primary: #4fb8b8;
+    --vk-primary-hover: #6cc7c7;
+    --vk-primary-soft: #12302f;
+    --vk-on-primary: #08201f;
+    --vk-bg: #101417;
+    --vk-surface: #172026;
+    --vk-text: #e3ebef;
+    --vk-muted: #98a8b4;
+    --vk-border: #26333b;
+    --vk-danger: #f97066;
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --vk-primary: #4fb8b8;
+  --vk-primary-hover: #6cc7c7;
+  --vk-primary-soft: #12302f;
+  --vk-on-primary: #08201f;
+  --vk-bg: #101417;
+  --vk-surface: #172026;
+  --vk-text: #e3ebef;
+  --vk-muted: #98a8b4;
+  --vk-border: #26333b;
+  --vk-danger: #f97066;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--vk-bg);
+  color: var(--vk-text);
+  font: 15px/1.55 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+a { color: var(--vk-primary); }
+.vk-container { max-width: 1080px; margin: 0 auto; padding: 24px 16px 48px; }
+.vk-btn {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px;
+  border: 0; border-radius: 8px; background: var(--vk-primary); color: var(--vk-on-primary);
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+.vk-btn:hover:not(:disabled) { background: var(--vk-primary-hover); }
+.vk-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.vk-btn-ghost { background: transparent; color: var(--vk-text); border: 1px solid var(--vk-border); }
+.vk-btn-ghost:hover:not(:disabled) { background: var(--vk-primary-soft); }
+.vk-card { background: var(--vk-surface); border: 1px solid var(--vk-border); border-radius: 12px; padding: 16px; }
+.vk-muted { color: var(--vk-muted); }
+.vk-danger { color: var(--vk-danger); }
+.vk-progress { height: 8px; border-radius: 4px; background: var(--vk-primary-soft); overflow: hidden; }
+.vk-progress > span { display: block; height: 100%; background: var(--vk-primary); transition: width 0.2s; }
