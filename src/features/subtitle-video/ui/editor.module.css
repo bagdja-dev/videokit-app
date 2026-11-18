@@ -53,3 +53,123 @@
 .presets { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
 .preset { border: 1px solid var(--vk-border); border-radius: 10px; padding: 10px; background: var(--vk-surface); cursor: pointer; text-align: left; font: inherit; color: inherit; }
 .presetActive { border-color: var(--vk-primary); box-shadow: 0 0 0 2px var(--vk-primary-soft); }
+
+/* ── Editor v2: pratinjau langsung · tab · timeline ─────────────────────────────── */
+.workspace {
+  display: grid; gap: 16px; align-items: start;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 440px);
+  grid-template-areas: 'player tabs' 'timeline timeline';
+}
+.wsPlayer { grid-area: player; min-width: 0; position: sticky; top: 72px; }
+.wsTabs { grid-area: tabs; min-width: 0; }
+.wsTimeline { grid-area: timeline; min-width: 0; }
+@media (max-width: 900px) {
+  .workspace { grid-template-columns: 1fr; grid-template-areas: 'player' 'timeline' 'tabs'; }
+  .wsPlayer { position: static; }
+}
+.player { display: grid; gap: 8px; }
+.playerEmpty { padding: 40px 16px; text-align: center; color: var(--vk-muted); }
+.stage { position: relative; margin: 0 auto; background: #000; border-radius: 10px; overflow: hidden; }
+.stage .canvas { display: block; width: 100%; height: 100%; object-fit: contain; cursor: pointer; }
+.bigPlay {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 72px; height: 72px; border-radius: 50%;
+  border: 0; background: rgb(0 0 0 / 0.5); color: #fff; display: grid; place-items: center; cursor: pointer;
+}
+.bigPlay:hover { background: var(--vk-primary); }
+.stageBadge { position: absolute; left: 8px; top: 8px; padding: 2px 8px; border-radius: 999px; background: rgb(0 0 0 / 0.6); color: #fff; font-size: 12px; }
+.stageBadgeErr { background: var(--vk-danger); }
+.controls { display: flex; align-items: center; gap: 8px; }
+.controls :global(.vk-btn) { min-height: 36px; padding: 0 12px; }
+.scrub { flex: 1; accent-color: var(--vk-primary); }
+.time { font-size: 13px; color: var(--vk-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.tabsCard { display: grid; gap: 12px; }
+.tabsCard :global(.vk-card) { border: 0; padding: 0; background: transparent; }
+.tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.tab { padding: 8px 4px; border: 1px solid var(--vk-border); border-radius: 8px; background: var(--vk-bg); color: var(--vk-text); font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; }
+.tabActive { background: var(--vk-primary); border-color: var(--vk-primary); color: var(--vk-on-primary); }
+.tabBody { display: grid; gap: 12px; }
+.tabsFooter { border-top: 1px solid var(--vk-border); padding-top: 12px; }
+.srtButtons { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.lineBlock { display: grid; gap: 6px; }
+.lineHead { display: flex; justify-content: space-between; font-size: 13px; color: var(--vk-muted); }
+.lineInput { font: inherit; color: var(--vk-text); background: var(--vk-surface); border: 1px solid var(--vk-border); border-radius: 6px; padding: 8px; resize: vertical; }
+.linkBtn { border: 0; background: none; color: var(--vk-danger); font: inherit; font-size: 13px; cursor: pointer; }
+.styleRow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
+.styleRow input[type='color'] { width: 34px; height: 30px; padding: 2px; border: 1px solid var(--vk-border); border-radius: 6px; background: var(--vk-surface); }
+.styleRow select, .styleRow input[type='number'] { font: inherit; padding: 4px 6px; border: 1px solid var(--vk-border); border-radius: 6px; background: var(--vk-surface); color: var(--vk-text); }
+.styleRow :global(.vk-btn) { min-height: 30px; padding: 0 10px; font-size: 13px; }
+.styleMore { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px; border-radius: 8px; background: var(--vk-bg); }
+.inlineNum { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+.inlineNum input { width: 72px; font: inherit; padding: 4px 6px; border: 1px solid var(--vk-border); border-radius: 6px; background: var(--vk-surface); color: var(--vk-text); }
+
+.timelineCard { display: grid; gap: 8px; }
+.timelineBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.timelineBar :global(.vk-btn) { min-height: 34px; padding: 0 12px; font-size: 14px; }
+.timelineInfo { flex: 1; font-size: 13px; color: var(--vk-muted); min-width: 160px; }
+.zoom { display: inline-flex; gap: 4px; }
+.timelineScroll { overflow-x: auto; overflow-y: hidden; border: 1px solid var(--vk-border); border-radius: 10px; background: var(--vk-bg); }
+.timelineTrack { position: relative; min-width: 100%; height: 96px; }
+.ruler { position: absolute; left: 0; right: 0; top: 0; height: 22px; border-bottom: 1px solid var(--vk-border); cursor: ew-resize; touch-action: none; z-index: 2; }
+.tick { position: absolute; top: 3px; font-size: 11px; color: var(--vk-muted); border-left: 1px solid var(--vk-border); padding-left: 3px; white-space: nowrap; }
+.lane { position: absolute; left: 0; right: 0; top: 22px; bottom: 0; }
+.block {
+  position: absolute; top: 10px; height: 52px; border-radius: 6px; background: #3b82f6; color: #fff;
+  display: flex; align-items: stretch; overflow: hidden; cursor: grab; box-sizing: border-box; border: 2px solid transparent; touch-action: none;
+}
+.blockNoVisual { background: #64748b; }
+.blockLive { box-shadow: inset 0 -3px 0 #fbbf24; }
+.blockSelected { border-color: #f59e0b; box-shadow: 0 0 0 2px rgb(245 158 11 / 0.35); }
+.blockText { flex: 1; min-width: 0; padding: 4px 4px; font-size: 12px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.handle { flex: none; width: 8px; cursor: ew-resize; background: rgb(255 255 255 / 0.18); touch-action: none; }
+.handle:hover { background: rgb(255 255 255 / 0.45); }
+.playhead { position: absolute; top: -22px; bottom: 0; width: 2px; background: #ef4444; pointer-events: none; }
+
+.renderDialog { width: min(640px, calc(100vw - 32px)); border: 1px solid var(--vk-border); border-radius: 14px; padding: 16px; background: var(--vk-surface); color: var(--vk-text); }
+.renderDialog::backdrop { background: rgb(0 0 0 / 0.45); }
+.renderDialog :global(.vk-card) { border: 0; padding: 0; }
+.dialogHead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.srtButtons .field { font-size: inherit; color: inherit; }
+
+/* Modal panel samping (pengaturan tanpa menggeser tata letak editor) */
+.sideModal {
+  margin: 0 0 0 auto; height: 100dvh; max-height: 100dvh; width: min(480px, 100vw); max-width: 100vw;
+  border: 0; border-left: 1px solid var(--vk-border); padding: 0; background: var(--vk-surface); color: var(--vk-text);
+  box-shadow: -12px 0 32px rgb(0 0 0 / 0.18);
+}
+.sideModal::backdrop { background: rgb(0 0 0 / 0.15); }
+.sideModalInner { padding: 16px; display: grid; gap: 12px; }
+.sideModal :global(.vk-card) { border: 0; padding: 0; background: transparent; }
+.summary { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--vk-border); border-radius: 10px; background: var(--vk-bg); }
+.summaryHead { display: flex; justify-content: space-between; align-items: center; }
+.summaryHead :global(.vk-btn) { min-height: 32px; padding: 0 12px; font-size: 13px; }
+.summaryLine { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.swatch { width: 14px; height: 14px; border-radius: 4px; border: 2px solid; flex: none; }
+.styleSummary { flex: 1; min-width: 0; color: var(--vk-muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.styleBtnOn { border-color: var(--vk-primary) !important; color: var(--vk-primary) !important; background: var(--vk-primary-soft) !important; }
+.modalForm { display: grid; gap: 12px; }
+
+.block:active { cursor: grabbing; }
+/* Kepala penanda posisi di penggaris: panah geser saat disorot */
+.playheadKnob {
+  position: absolute; top: 4px; width: 12px; height: 14px; margin-left: -5px; background: #ef4444; border-radius: 2px 2px 6px 6px;
+  cursor: ew-resize; box-shadow: 0 1px 3px rgb(0 0 0 / 0.3); pointer-events: none;
+}
+.ruler:hover .playheadKnob { transform: scale(1.15); }
+
+/* Panel kanan setinggi player: tab & tombol SRT tetap, isi tab di-scroll (tidak memanjangkan halaman). */
+.workspace { align-items: stretch; }
+.wsTabs { position: relative; min-height: 460px; }
+.wsTabs > .tabsCard { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; }
+.tabPanel { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+.tabsFooter { flex: none; }
+@media (max-width: 900px) {
+  .wsTabs { min-height: 0; }
+  .wsTabs > .tabsCard { position: static; max-height: 75vh; }
+}
+
+/* Kepala cue (nomor & waktu) menempel di atas saat isi tab di-scroll */
+.cueHeader {
+  position: sticky; top: 0; z-index: 2; background: var(--vk-surface);
+  padding: 4px 0 8px; margin-bottom: -4px; border-bottom: 1px solid var(--vk-border);
+}

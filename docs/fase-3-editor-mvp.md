@@ -1,4 +1,8 @@
-# Fase 3 — Editor MVP "Video dari Subtitle" (17 Nov 2026)
+# Fase 3 — Editor MVP "Video Lyric Editor" (17 Nov 2026)
+
+> **Nama tool diganti 18 Nov 2026:** "Video dari Subtitle" menjadi **Video Lyric Editor**. Rute tetap `/subtitle-video/`
+> dan kode tetap di `features/subtitle-video/` supaya link & project lama tidak putus. Kartu beranda punya tombol **?** yang
+> membuka popup panduan (infografis 4 langkah + panduan singkat + tips, `ui/LyricEditorGuide.tsx`).
 
 MVP **tanpa server**: semua berjalan di browser pengguna — dokumen project & file media di IndexedDB, render
 dengan executor browser (Fase 2). videokit-api (Fase 1) menyusul untuk login, simpan lintas perangkat, preset bersama,
@@ -47,6 +51,22 @@ Produk akan dibuka di internet, jadi fitur hanya bisa dipakai setelah login SSO 
 | Konfigurasi | `NEXT_PUBLIC_VIDEOKIT_API_URL` saat build produksi. Di development default host app port 5031, termasuk lewat IP LAN |
 | Uji | `scripts/lib/mock-auth-api.mjs` meniru kontrak API. `e2e:editor` kini menguji beranda tamu → buka tool → login → kembali → render → logout |
 
+## Editor v2: pratinjau langsung, tab, timeline (18 Nov 2026)
+
+Tata letak mengikuti wireframe Nandang: player di kiri, tab (Setting · Subtitle · Visual) di kanan, timeline cue di bawah.
+
+| Bagian | Isi |
+|---|---|
+| **Pratinjau langsung** (`LivePlayer`) | Putar/jeda (klik kanvas atau Spasi), geser posisi. Spec, aturan *fit* (`core/render/draw-fit.ts`, dipakai bersama compositor), dan subtitle libass sama dengan render akhir. Subtitle dirender ulang setelah teks/gaya berubah (debounce 350 ms), hanya untuk jendela −15/+60 dtk di sekitar posisi putar. Suara: musik, audio cue, audio video latar, suara klip, dengan ducking sederhana. Visual diputar dari `<video>` biasa, jadi pergantian klip bisa terlambat sepersekian detik; render akhir tetap tepat per frame |
+| **Timeline** | Lebar blok sebanding durasi, zoom, penggaris waktu, garis posisi putar (mengikuti saat main). Klik blok = pilih + lompat. **Tepi kiri/kanan bisa digeser** (snap 50 ms, dibatasi cue tetangga, min. 0,2 dtk, satu gerakan = satu undo). **Sisipkan cue** (tanpa geser): tombol di posisi putar atau ketuk dua kali area kosong; di dalam cue → dibelah (visual berlanjut), di celah → cue baru maks. 2 dtk. **Sisipkan & geser**: cue 2 dtk disisipkan (setelah cue di posisi putar) dan semua cue sesudahnya mundur 2 dtk, jadi selalu berhasil walau cue rapat. **Seret badan blok** = geser cue itu & semua sesudahnya (ripple, dibatasi cue sebelumnya). **Geser cue…**: semua cue atau mulai dari cue terpilih, ±detik atau "mulai di detik X", dengan pratinjau sebelum/sesudah. **Penanda posisi merah**: tekan & seret di penggaris (kursor geser). Hapus cue. Semua operasi = satu langkah undo |
+| **Tab Setting** | Ukuran output, warna latar, lalu **ringkasan** *Subtitle global* (posisi + gaya default per baris) dan *Latar & audio* (musik, video latar *With audio*, ducking). Pengeditan keduanya di **modal panel samping**, jadi tata letak editor tidak bergeser dan pratinjau tetap terlihat. Default **2 gaya baris**; baris cue berikutnya memakai gaya baris terakhir; gaya tambahan ditambah/dihapus manual |
+| **Tab Subtitle** | Waktu mulai/selesai cue terpilih, teks per baris bahasa, tambah/hapus baris, **gaya khusus cue per baris** (warna, ukuran, font; ✏️ membuka modal untuk garis tepi, tebal/miring, kotak latar) dengan **Reset** ke gaya global |
+| **Tab Visual** | Visual & audio cue terpilih (fit, titik mulai klip, tahan/loop, suara asli, lanjutkan ke cue berikutnya) |
+| Lain-lain | Unggah/unduh SRT di bawah tab. **Render video** di bilah atas membuka dialog render |
+
+Gaya khusus cue disimpan di `cue.lineStyles[baris]` dan diterjemahkan ke **style ASS turunan** unik (`Slot1o1`, …),
+bukan tag inline, sehingga kotak latar juga bisa di-override. Renderer browser dan ffmpeg membaca hal yang sama.
+
 ## Struktur
 
 ```
@@ -62,7 +82,8 @@ src/features/subtitle-video/
   storage.ts              IndexedDB: projects & media (Blob)
   media.ts                impor file lokal + metadata (mediabunny)
   run-render.ts           muat Blob → renderVideo
-  ui/                     ProjectList, Editor, CueList, DesignPanel, AudioBackgroundPanel, RenderPanel, MediaButton
+  playback.ts             status putar pratinjau (posisi, main/jeda), terpisah dari store dokumen
+  ui/                     ProjectList, Editor, LivePlayer, Timeline, EditorTabs, DesignPanel, AudioBackgroundPanel, RenderPanel, MediaButton
 src/app/subtitle-video/   rute /subtitle-video/ (?id=… membuka editor)
 ```
 
@@ -72,10 +93,10 @@ src/app/subtitle-video/   rute /subtitle-video/ (?id=… membuka editor)
 |---|---|
 | Unit (vitest) | 38/38 — SRT (+ encoding CJK), ASS, CJK (font cadangan, kinsoku, tebak bahasa, pemilihan font), spec builder, timeline, amplop |
 | `npm run e2e:render` (mesin + video latar ber-audio vs ffmpeg) | lulus, SSIM min. 0,974 — subtitle sampel kini memuat baris JP/KR/ZH (generator ASS produksi), cocok dengan ffmpeg |
-| `npm run e2e:editor` (Chrome headless dikendalikan seperti pengguna) | lulus — buat project → SRT → visual/audio cue → musik + video latar (with audio) → render 30 dtk dalam 8,1 dtk → MP4 1080×1920 H.264+AAC → project utuh setelah reload |
+| `npm run e2e:editor` (Chrome headless dikendalikan seperti pengguna) | lulus (v2: + pratinjau langsung tampil & berjalan, gaya khusus cue + Reset, sisip cue membelah, drag tepi cue + satu undo) — buat project → SRT → visual/audio cue → musik + video latar (with audio) → render 30 dtk dalam 8,1 dtk → MP4 1080×1920 H.264+AAC → project utuh setelah reload |
 
 ## Batasan MVP
 
 - Project & media hanya di browser/perangkat ini, terpisah per akun (belum sinkron, belum riwayat cloud).
 - Pratinjau dimulai dari awal audio cue walau rentang dimulai di tengah cue.
-- Belum ada timeline grafis (daftar cue vertikal), belum ada panduan safe area, belum ada preset desain tersimpan.
+- Belum ada panduan safe area dan preset desain tersimpan. Cue belum bisa digeser utuh (hanya tepinya).

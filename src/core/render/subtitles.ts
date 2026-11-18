@@ -17,6 +17,8 @@ export interface SubtitleRenderOptions {
   /** Basis URL vendor JASSUB (hasil `npm run vendor`). */
   vendorBase?: string;
   signal?: AbortSignal;
+  /** Hanya render interval yang beririsan dengan rentang ini (pratinjau langsung SRT panjang). */
+  window?: { from_ms: number; to_ms: number };
 }
 
 const WARMUP_TIMEOUT_MS = 10_000;
@@ -83,6 +85,7 @@ export async function renderSubtitleLayers(assText: string, opts: SubtitleRender
     for (let i = 0; i < bounds.length - 1; i++) {
       opts.signal?.throwIfAborted();
       const a = bounds[i] as number, b = bounds[i + 1] as number;
+      if (opts.window && (b <= opts.window.from_ms || a >= opts.window.to_ms)) continue;
       const active = spans.filter((s) => s.start <= a && s.end >= b);
       if (!active.length) continue;
       const cap = await capture(a + 1);

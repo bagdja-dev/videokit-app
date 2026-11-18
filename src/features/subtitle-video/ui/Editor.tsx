@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { decodeSrtBytes, parseSrt, toSrt, type SrtWarning } from '@/core/subtitle/srt';
-import { LIMITS, OUTPUT_PRESETS, type OutputPreset } from '../model';
+import { LIMITS } from '../model';
+import { usePlayback } from '../playback';
 import { loadProject } from '../storage';
 import { useEditor } from '../store';
-import AudioBackgroundPanel from './AudioBackgroundPanel';
-import CueList from './CueList';
-import DesignPanel from './DesignPanel';
+import EditorTabs from './EditorTabs';
+import LivePlayer from './LivePlayer';
 import RenderPanel from './RenderPanel';
+import Timeline from './Timeline';
 import styles from './editor.module.css';
 
 const SAVE_LABEL = { saved: 'Tersimpan di perangkat', saving: 'Menyimpan…', dirty: 'Belum tersimpan…', error: 'Gagal menyimpan' } as const;
@@ -51,8 +52,9 @@ export default function Editor({ projectId, onBack }: { projectId: string; onBac
   const saveState = useEditor((s) => s.saveState);
   const canUndo = useEditor((s) => s.past.length > 0);
   const canRedo = useEditor((s) => s.future.length > 0);
-  const { load, undo, redo, setTitle, setPreset } = useEditor.getState();
+  const { load, undo, redo, setTitle } = useEditor.getState();
   const [loadError, setLoadError] = useState<string | null>(null);
+  const renderDialog = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     loadProject(projectId)
@@ -60,11 +62,24 @@ export default function Editor({ projectId, onBack }: { projectId: string; onBac
       .catch((e: unknown) => setLoadError(String(e)));
   }, [projectId, load]);
 
-  // Ctrl/Cmd+Z = undo, Ctrl/Cmd+Shift+Z / Ctrl+Y = redo (kecuali sedang mengetik di kolom teks)
+  // Pratinjau mulai dari awal tiap project dibuka.
+  useEffect(() => { usePlayback.getState().setPlaying(false); usePlayback.getState().seek(0); }, [projectId]);
+
+  // Cue terpilih MENGIKUTI posisi putar (seret penanda, slider, saat diputar) → panel Subtitle/Visual selalu
+  // menampilkan cue yang aktif. Di celah antar-cue pilihan terakhir dipertahankan.
+  useEffect(() => usePlayback.subscribe((pb, prev) => {
+    if (pb.timeMs === prev.timeMs) return;
+    const ed = useEditor.getState();
+    const cue = ed.project?.cues.find((c) => pb.timeMs >= c.start_ms && pb.timeMs < c.end_ms);
+    if (cue && cue.id !== ed.selectedCueId) ed.select(cue.id);
+  }), []);
+
+  // Ctrl/Cmd+Z = undo, Ctrl/Cmd+Shift+Z / Ctrl+Y = redo, Spasi = putar/jeda (kecuali sedang mengetik)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (e.key === ' ' && !e.metaKey && !e.ctrlKey && t?.tagName !== 'BUTTON') { e.preventDefault(); usePlayback.getState().toggle(); return; }
       if (!(e.metaKey || e.ctrlKey)) return;
       if (e.key.toLowerCase() === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((e.key.toLowerCase() === 'z' && e.shiftKey) || e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
@@ -83,6 +98,13 @@ export default function Editor({ projectId, onBack }: { projectId: string; onBac
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  const srtButtons = (
+    <div className={styles.srtButtons}>
+      <SrtImport hasCues={project.cues.length > 0} />
+      {project.cues.length > 0 && <button className="vk-btn vk-btn-ghost" onClick={downloadSrt}>Unduh SRT</button>}
+    </div>
+  );
+
   return (
     <main className={styles.page}>
       <div className={styles.topbar}>
@@ -91,35 +113,32 @@ export default function Editor({ projectId, onBack }: { projectId: string; onBac
         <span className={styles.saveState} role="status">{SAVE_LABEL[saveState]}</span>
         <button className="vk-btn vk-btn-ghost" disabled={!canUndo} onClick={undo} title="Urungkan (Ctrl/Cmd+Z)">↶</button>
         <button className="vk-btn vk-btn-ghost" disabled={!canRedo} onClick={redo} title="Ulangi (Ctrl/Cmd+Shift+Z)">↷</button>
+        {project.cues.length > 0 && (
+          <button className="vk-btn" onClick={() => { usePlayback.getState().setPlaying(false); renderDialog.current?.showModal(); }} data-role="open-render">Render video</button>
+        )}
       </div>
-
-      <section className="vk-card" style={{ marginBottom: 16 }}>
-        <div className={styles.row} style={{ alignItems: 'flex-end', gap: 16 }}>
-          <label className={styles.field}>Ukuran output
-            <select value={project.preset} onChange={(e) => setPreset(e.target.value as OutputPreset)}>
-              {(Object.keys(OUTPUT_PRESETS) as OutputPreset[]).map((k) => <option key={k} value={k}>{OUTPUT_PRESETS[k].label} — {OUTPUT_PRESETS[k].hint}</option>)}
-            </select>
-          </label>
-          <SrtImport hasCues={project.cues.length > 0} />
-          {project.cues.length > 0 && <button className="vk-btn vk-btn-ghost" onClick={downloadSrt}>Unduh SRT</button>}
-        </div>
-      </section>
 
       {project.cues.length === 0 ? (
         <section className="vk-card">
           <h2 className={styles.h2}>Mulai dengan file SRT</h2>
           <p className={styles.muted}>Tiap baris teks dalam satu cue diperlakukan sebagai satu bahasa (mis. baris 1 Indonesia, baris 2 English).</p>
+          {srtButtons}
         </section>
       ) : (
-        <div className={styles.layout}>
-          <CueList project={project} />
-          <div className={styles.side}>
-            <RenderPanel project={project} />
-            <AudioBackgroundPanel project={project} />
-            <DesignPanel project={project} />
-          </div>
+        <div className={styles.workspace}>
+          <div className={styles.wsPlayer}><LivePlayer project={project} /></div>
+          <div className={styles.wsTabs}><EditorTabs project={project} footer={srtButtons} /></div>
+          <div className={styles.wsTimeline}><Timeline project={project} /></div>
         </div>
       )}
+
+      <dialog ref={renderDialog} className={styles.renderDialog} aria-label="Render video">
+        <div className={styles.dialogHead}>
+          <strong>Render video</strong>
+          <button className="vk-btn vk-btn-ghost" onClick={() => renderDialog.current?.close()} aria-label="Tutup">✕</button>
+        </div>
+        {project.cues.length > 0 && <RenderPanel project={project} />}
+      </dialog>
     </main>
   );
 }

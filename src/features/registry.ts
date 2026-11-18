@@ -9,15 +9,18 @@ export interface ToolInfo {
   badge: string;
   /** Halaman internal tim (tidak diindeks). */
   internal?: boolean;
+  /** Punya popup panduan (tombol ?) di kartu beranda. */
+  hasGuide?: boolean;
 }
 
 export const TOOLS: readonly ToolInfo[] = [
   {
     id: 'subtitle-video',
-    name: 'Video dari Subtitle',
-    description: 'Unggah SRT, isi tiap baris dengan klip atau gambar, atur gaya teks per bahasa.',
+    name: 'Video Lyric Editor',
+    description: 'Ubah file lirik atau subtitle (SRT) jadi video lirik siap posting: tiap baris dengan klip atau gambar sendiri, teks multi-bahasa, langsung jadi MP4 di perangkatmu.',
     href: '/subtitle-video/',
     badge: 'Buka',
+    hasGuide: true,
   },
   {
     id: 'avatar-record',

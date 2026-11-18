@@ -32,7 +32,7 @@ const absolute = (sources: RenderSources): RenderSources =>
  * bila dibiarkan diunduh worker JASSUB, pemanasan font bisa melewati batas waktu di jaringan lambat.
  * Cache HTTP browser membuat render berikutnya tidak mengunduh ulang.
  */
-async function loadFonts(paths: string[], onProgress: (p: number) => void, signal?: AbortSignal): Promise<Uint8Array[]> {
+export async function loadFonts(paths: string[], onProgress: (p: number) => void = () => {}, signal?: AbortSignal): Promise<Uint8Array[]> {
   const urls = [...new Set(paths)].map((f) => new URL(f, location.href).href);
   const done = new Array<number>(urls.length).fill(0);
   const total = new Array<number>(urls.length).fill(0);
