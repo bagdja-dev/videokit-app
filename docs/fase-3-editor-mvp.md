@@ -1,4 +1,8 @@
-# Fase 3 — Editor MVP "Video dari Subtitle" (17 Nov 2026)
+# Fase 3 — Editor MVP "Video Lyric Editor" (17 Nov 2026)
+
+> **Nama tool diganti 18 Nov 2026:** "Video dari Subtitle" menjadi **Video Lyric Editor**. Rute tetap `/subtitle-video/`
+> dan kode tetap di `features/subtitle-video/` supaya link & project lama tidak putus. Kartu beranda punya tombol **?** yang
+> membuka popup panduan (infografis 4 langkah + panduan singkat + tips, `ui/LyricEditorGuide.tsx`).
 
 MVP **tanpa server**: semua berjalan di browser pengguna — dokumen project & file media di IndexedDB, render
 dengan executor browser (Fase 2). videokit-api (Fase 1) menyusul untuk login, simpan lintas perangkat, preset bersama,

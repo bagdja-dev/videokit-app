@@ -24,7 +24,7 @@ export default function ProjectList({ onOpen }: { onOpen: (id: string) => void }
 
   return (
     <main className={styles.page}>
-      <h1 style={{ margin: '0 0 4px', color: 'var(--vk-primary)' }}>Video dari Subtitle</h1>
+      <h1 style={{ margin: '0 0 4px', color: 'var(--vk-primary)' }}>Video Lyric Editor</h1>
       <p className={styles.muted}>Unggah SRT, isi tiap baris dengan klip atau gambar, atur gaya teks per bahasa. Semua diproses di perangkat ini.</p>
 
       <section className="vk-card" style={{ margin: '16px 0' }}>

@@ -1,4 +1,4 @@
-// E2E editor "Video dari Subtitle": Chrome headless dikendalikan lewat DevTools Protocol seperti pengguna —
+// E2E editor "Video Lyric Editor": Chrome headless dikendalikan lewat DevTools Protocol seperti pengguna —
 // buat project → unggah SRT → isi visual/audio → musik + video latar (with audio) → render → periksa MP4.
 // Pakai: npm run e2e:editor   (SKIP_BUILD=1 untuk memakai out/ yang ada)
 import { execFileSync, spawn } from 'node:child_process';
@@ -70,12 +70,23 @@ const step = (m) => console.log(`• ${m}`);
 await cdp('Page.enable'); await cdp('DOM.enable'); await cdp('Runtime.enable');
 step('beranda publik: header tampil, belum login → tombol Masuk');
 await cdp('Page.navigate', { url: `http://localhost:${PORT}/` });
-await waitFor(`!!document.querySelector('header a[href*="/auth/login"]') && document.body.innerText.includes('Video dari Subtitle')`, 'beranda + tombol Masuk');
+await waitFor(`!!document.querySelector('header a[href*="/auth/login"]') && document.body.innerText.includes('Video Lyric Editor')`, 'beranda + tombol Masuk');
+step('kartu Video Lyric Editor: tombol ? membuka panduan (infografis 4 langkah)');
+await ev(`document.querySelector('button[aria-label="Panduan Video Lyric Editor"]').click()`);
+await waitFor(`!!document.querySelector('dialog[open][data-role="tool-guide"]') && document.querySelectorAll('dialog[open] svg[role=img]').length === 4`, 'popup panduan', 5000);
+for (const [name, w, h] of [['guide-desktop', 1280, 900], ['guide-mobile', 390, 1400]]) {
+  await cdp('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: w < 600 });
+  await sleep(500);
+  await cdp('Page.captureScreenshot', { format: 'png' }).then((r) => writeFileSync(`${OUT}/${name}.png`, Buffer.from(r.result.data, 'base64')));
+}
+await cdp('Emulation.clearDeviceMetricsOverride');
+await ev(`document.querySelector('button[aria-label="Tutup panduan"]').click()`);
+await waitFor(`!document.querySelector('dialog[open]')`, 'panduan tertutup', 5000);
 step('buka tool tanpa login → dialihkan ke login → kembali ke tool');
 await cdp('Page.navigate', { url: `http://localhost:${PORT}/subtitle-video/` });
 await waitFor(`location.pathname === '/subtitle-video/' && document.body.innerText.includes(${JSON.stringify(MOCK_USER.username)})`, 'kembali dari login, profil di header', 20_000);
 if (mockApi.stats.logins !== 1) fail(`login dipanggil ${mockApi.stats.logins}× (harus 1)`);
-const headerApp = await ev(`[...document.querySelectorAll('header span')].map(s=>s.textContent).includes('Video dari Subtitle')`);
+const headerApp = await ev(`[...document.querySelectorAll('header span')].map(s=>s.textContent).includes('Video Lyric Editor')`);
 if (!headerApp) fail('nama app aktif tidak tampil di tengah header');
 await waitFor(`!!document.querySelector('button') && [...document.querySelectorAll('button')].some(b=>b.textContent.includes('Buat'))`, 'halaman daftar project');
 step('buat project 9:16');
@@ -86,6 +97,12 @@ await setFile('input[aria-label="Unggah file SRT"]', srtPath);
 const cueCount = `document.querySelectorAll('[data-cue]').length`;
 await waitFor(`${cueCount} === 10`, '10 cue di timeline');
 
+const undo = async () => {
+  await ev(`document.activeElement?.blur()`);
+  await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'z', code: 'KeyZ', modifiers: 4, windowsVirtualKeyCode: 90 });
+  await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'z', code: 'KeyZ', modifiers: 4, windowsVirtualKeyCode: 90 });
+  await sleep(300);
+};
 const tab = (name) => ev(`[...document.querySelectorAll('[role=tab]')].find(b=>b.textContent===${JSON.stringify(name)}).click()`);
 const selectCue = async (n) => { await ev(`document.querySelector('[data-cue="${n}"]').click()`); await sleep(250); };
 const pickVisual = (accept, file) => setFile(`[data-role="visual-editor"] input[type=file][accept="${accept}"]`, file);
@@ -145,6 +162,20 @@ for (const [name, w, h] of [['editor-v2-desktop', 1440, 1000], ['editor-v2-mobil
   await sleep(700);
   await cdp('Page.captureScreenshot', { format: 'png' }).then((r) => writeFileSync(`${OUT}/${name}.png`, Buffer.from(r.result.data, 'base64')));
 }
+// panel kanan setinggi kolom player & isi tab bisa di-scroll (cek di desktop, tab Subtitle dengan banyak baris)
+await cdp('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+await tab('Subtitle');
+for (let i = 0; i < 4; i++) await ev(`[...document.querySelectorAll('[data-role="cue-editor"] button')].find(b=>b.textContent.includes('Baris bahasa')).click()`);
+await sleep(400);
+const panel = await ev(`(()=>{const tabs=document.querySelector('[data-role="tab-panel"]').closest('section').getBoundingClientRect();const player=document.querySelector('[data-role="live-preview"]').closest('[class*="wsPlayer"]').getBoundingClientRect();const tp=document.querySelector('[data-role="tab-panel"]');return {tabsH:Math.round(tabs.height),playerH:Math.round(player.height),scrollable:tp.scrollHeight>tp.clientHeight+5};})()`);
+const hdrTop0 = await ev(`document.querySelector('[data-role="cue-header"]').getBoundingClientRect().top`);
+await ev(`document.querySelector('[data-role="tab-panel"]').scrollTop = 400`);
+await sleep(200);
+const hdrTop1 = await ev(`document.querySelector('[data-role="cue-header"]').getBoundingClientRect().top`);
+if (Math.abs(hdrTop1 - hdrTop0) > 2) fail(`nomor cue ikut ter-scroll (${hdrTop0} → ${hdrTop1})`);
+await cdp('Page.captureScreenshot', { format: 'png' }).then((r) => writeFileSync(`${OUT}/editor-v2-panel.png`, Buffer.from(r.result.data, 'base64')));
+if (!(Math.abs(panel.tabsH - panel.playerH) <= 2 && panel.scrollable)) fail(`panel kanan tidak setinggi player / tidak scroll: ${JSON.stringify(panel)}`);
+await undo(); await undo(); await undo(); await undo();
 await cdp('Emulation.clearDeviceMetricsOverride');
 
 step('tab Subtitle: gaya khusus cue 2 (warna) → Reset');
@@ -208,12 +239,6 @@ await waitFor(`${cueCount} === 10`, 'undo sisip cue', 5000);
 
 // helper: data cue dari timeline (atribut title berisi waktu) & drag tetikus
 const cueStart = (n) => ev(`(()=>{const t=document.querySelector('[data-cue="${n}"]').title;return t.split(' · ')[1].split('–')[0];})()`);
-const undo = async () => {
-  await ev(`document.activeElement?.blur()`);
-  await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'z', code: 'KeyZ', modifiers: 4, windowsVirtualKeyCode: 90 });
-  await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'z', code: 'KeyZ', modifiers: 4, windowsVirtualKeyCode: 90 });
-  await sleep(300);
-};
 const dragX = async (sel, dx) => {
   await ev(`document.querySelector(${JSON.stringify(sel)}).scrollIntoView({block:'center',inline:'center'})`);
   await sleep(200);
@@ -250,6 +275,15 @@ const p0 = await pos();
 await dragX('[data-role="timeline-ruler"]', 80);
 const p1 = await pos();
 if (!(Math.abs(p1 - p0) > 500)) fail(`posisi tidak berpindah saat seret penggaris (${p0} → ${p1})`);
+// cue terpilih & panel Subtitle harus mengikuti cue yang aktif di posisi baru
+await tab('Subtitle');
+await waitFor(`(()=>{const t=+document.querySelector('input[aria-label="Posisi pratinjau"]').value;
+  const toMs=(s)=>{const [m,r]=s.split(':');return Math.round((+m*60+ +r)*1000);};
+  const blocks=[...document.querySelectorAll('[data-cue]')];
+  const active=blocks.find(b=>{const [a,z]=b.title.split(' · ')[1].split('–');return t>=toMs(a)&&t<toMs(z);});
+  if(!active) return true; // di celah: pilihan lama dipertahankan
+  const n=active.getAttribute('data-cue');
+  return active.hasAttribute('data-selected') && document.querySelector('[data-role="cue-editor"]')?.innerText.includes('Cue #'+n);})()`, 'panel Subtitle mengikuti cue aktif di posisi putar', 5000);
 
 step('geser semua cue +1 dtk (cue pertama 0:00.5 → 0:01.5) lalu undo');
 await ev(`document.querySelector('[data-role="open-shift"]').click()`);

@@ -65,6 +65,15 @@ export default function Editor({ projectId, onBack }: { projectId: string; onBac
   // Pratinjau mulai dari awal tiap project dibuka.
   useEffect(() => { usePlayback.getState().setPlaying(false); usePlayback.getState().seek(0); }, [projectId]);
 
+  // Cue terpilih MENGIKUTI posisi putar (seret penanda, slider, saat diputar) → panel Subtitle/Visual selalu
+  // menampilkan cue yang aktif. Di celah antar-cue pilihan terakhir dipertahankan.
+  useEffect(() => usePlayback.subscribe((pb, prev) => {
+    if (pb.timeMs === prev.timeMs) return;
+    const ed = useEditor.getState();
+    const cue = ed.project?.cues.find((c) => pb.timeMs >= c.start_ms && pb.timeMs < c.end_ms);
+    if (cue && cue.id !== ed.selectedCueId) ed.select(cue.id);
+  }), []);
+
   // Ctrl/Cmd+Z = undo, Ctrl/Cmd+Shift+Z / Ctrl+Y = redo, Spasi = putar/jeda (kecuali sedang mengetik)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

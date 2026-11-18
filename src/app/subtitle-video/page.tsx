@@ -3,8 +3,8 @@ import RequireAuth from '@/components/RequireAuth';
 import SubtitleVideoApp from '@/features/subtitle-video/ui/SubtitleVideoApp';
 
 export const metadata: Metadata = {
-  title: 'Video dari Subtitle — VideoKit',
-  description: 'Unggah SRT, isi tiap baris dengan klip atau gambar, atur gaya teks per bahasa, render di perangkat.',
+  title: 'Video Lyric Editor — VideoKit',
+  description: 'Buat video lirik dan subtitle multi-bahasa dari file SRT: klip atau gambar per baris, gaya teks per bahasa, render MP4 di perangkat.',
 };
 
 export default function SubtitleVideoPage() {

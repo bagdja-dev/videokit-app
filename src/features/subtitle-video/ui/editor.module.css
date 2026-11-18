@@ -156,3 +156,20 @@
   cursor: ew-resize; box-shadow: 0 1px 3px rgb(0 0 0 / 0.3); pointer-events: none;
 }
 .ruler:hover .playheadKnob { transform: scale(1.15); }
+
+/* Panel kanan setinggi player: tab & tombol SRT tetap, isi tab di-scroll (tidak memanjangkan halaman). */
+.workspace { align-items: stretch; }
+.wsTabs { position: relative; min-height: 460px; }
+.wsTabs > .tabsCard { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; }
+.tabPanel { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+.tabsFooter { flex: none; }
+@media (max-width: 900px) {
+  .wsTabs { min-height: 0; }
+  .wsTabs > .tabsCard { position: static; max-height: 75vh; }
+}
+
+/* Kepala cue (nomor & waktu) menempel di atas saat isi tab di-scroll */
+.cueHeader {
+  position: sticky; top: 0; z-index: 2; background: var(--vk-surface);
+  padding: 4px 0 8px; margin-bottom: -4px; border-bottom: 1px solid var(--vk-border);
+}

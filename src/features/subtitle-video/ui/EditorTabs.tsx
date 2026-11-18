@@ -101,7 +101,7 @@ function SubtitleTab({ project }: { project: SubtitleVideoProject }) {
   const sec = (ms: number) => (ms / 1000).toFixed(2);
   return (
     <div className={styles.tabBody} data-role="cue-editor">
-      <div className={styles.row}>
+      <div className={`${styles.row} ${styles.cueHeader}`} data-role="cue-header">
         <strong>Cue #{index + 1}</strong>
         <label className={styles.inlineNum}>Mulai <input type="number" step={0.05} min={0} value={sec(cue.start_ms)} key={`s${cue.id}${cue.start_ms}`}
           onBlur={(e) => updateCueTiming(cue.id, Math.round(+e.target.value * 1000), cue.end_ms)} />s</label>
@@ -254,7 +254,7 @@ export default function EditorTabs({ project, footer }: { project: SubtitleVideo
           <button key={k} role="tab" aria-selected={tab === k} className={`${styles.tab} ${tab === k ? styles.tabActive : ''}`} onClick={() => setTab(k)}>{label}</button>
         ))}
       </div>
-      <div role="tabpanel">
+      <div role="tabpanel" className={styles.tabPanel} data-role="tab-panel">
         {tab === 'setting' && <SettingTab project={project} />}
         {tab === 'subtitle' && <SubtitleTab project={project} />}
         {tab === 'visual' && <VisualTab project={project} />}
