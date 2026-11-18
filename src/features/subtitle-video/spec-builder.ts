@@ -4,7 +4,7 @@
 import { buildAss } from '@/core/subtitle/ass';
 import { fontSetOf } from '@/core/render/fonts';
 import type { AudioTrack, RenderSpecV1, VideoSegment } from '@/core/render';
-import { OUTPUT_PRESETS, type SubtitleVideoProject } from './model';
+import { OUTPUT_PRESETS, type Cue, type SubtitleVideoProject } from './model';
 
 export const TAIL_MS = 500;
 const SUBS_KEY = '__subs';
@@ -32,6 +32,17 @@ const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
 export function projectDuration(p: SubtitleVideoProject): number {
   const last = p.cues.reduce((m, c) => Math.max(m, c.end_ms), 0);
   return last > 0 ? last + TAIL_MS : 0;
+}
+
+/** Ukuran/garis override ikut diskalakan untuk pratinjau resolusi kecil (sama seperti gaya slot). */
+function scaleOverrides(list: Cue['lineStyles'], scale: number): Cue['lineStyles'] {
+  if (!list || scale === 1) return list;
+  return list.map((o) => (o ? {
+    ...o,
+    ...(o.size !== undefined ? { size: Math.round(o.size * scale) } : {}),
+    ...(o.outline !== undefined ? { outline: o.outline * scale } : {}),
+    ...(o.shadow !== undefined ? { shadow: o.shadow * scale } : {}),
+  } : o));
 }
 
 export function buildRenderJob(p: SubtitleVideoProject, opts: BuildOptions = {}): RenderJob {
@@ -100,7 +111,7 @@ export function buildRenderJob(p: SubtitleVideoProject, opts: BuildOptions = {})
   // --- Subtitle (waktu relatif rentang)
   const assCues = cues
     .filter((c) => c.end_ms > from && c.start_ms < to)
-    .map((c) => ({ start_ms: shift(c.start_ms), end_ms: shift(c.end_ms), lines: c.lines }));
+    .map((c) => ({ start_ms: shift(c.start_ms), end_ms: shift(c.end_ms), lines: c.lines, lineStyles: scaleOverrides(c.lineStyles, scale) }));
   const designScaled = scale === 1 ? p.design : {
     ...p.design,
     marginV: Math.round(p.design.marginV * scale), marginH: Math.round(p.design.marginH * scale),

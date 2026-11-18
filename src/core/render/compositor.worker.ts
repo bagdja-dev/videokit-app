@@ -11,6 +11,7 @@ import { segmentFrameRange, sourceTimeFor, totalFrames } from './timeline';
 import type { Fit, RenderSource } from './types';
 import { isColorSegment } from './types';
 import { AUDIO_SAMPLE_RATE } from './audio';
+import { createFitDrawer } from './draw-fit';
 import type { AvatarOverlayRenderer } from '../avatar/overlay-renderer';
 
 const post = (m: FromWorker) => (self as unknown as Worker).postMessage(m);
@@ -53,11 +54,6 @@ async function run(start: Extract<ToWorker, { type: 'start' }>) {
 
   const canvas = new OffscreenCanvas(W, H);
   const ctx = canvas.getContext('2d', { alpha: false })!;
-  // Latar blur: dirender di kanvas kecil lalu diperbesar — jauh lebih murah dari blur penuh (temuan PoC §5).
-  const BLUR_DOWNSCALE = 8;
-  const small = new OffscreenCanvas(Math.max(2, Math.round(W / BLUR_DOWNSCALE)), Math.max(2, Math.round(H / BLUR_DOWNSCALE)));
-  const sctx = small.getContext('2d')!;
-
   const target = storage === 'opfs'
     ? new StreamTarget(await opfsWritable(opfsFileName), { chunked: true })
     : new BufferTarget();
@@ -94,32 +90,7 @@ async function run(start: Extract<ToWorker, { type: 'start' }>) {
       opened.set(key, state);
       return state;
     };
-    /**
-     * Gambar media dengan fit. `clear`: bersihkan ke background_color dulu — piksel transparan (PNG
-     * logo/stiker) & area kosong `contain` menampilkan warna latar. Saat ada lapisan latar, clear=false
-     * sehingga area itu memperlihatkan lapisan latar. Aturan yang sama dipakai executor server.
-     */
-    const drawFit = (img: CanvasImageSource, iw: number, ih: number, fit: Fit, clear: boolean) => {
-      const cover = Math.max(W / iw, H / ih), contain = Math.min(W / iw, H / ih);
-      const draw = (c: OffscreenCanvasRenderingContext2D, cw: number, ch: number, s: number) => {
-        const w = iw * s, h = ih * s;
-        c.drawImage(img, (cw - w) / 2, (ch - h) / 2, w, h);
-      };
-      if (clear) {
-        ctx.fillStyle = spec.output.background_color;
-        ctx.fillRect(0, 0, W, H);
-      }
-      if (fit === 'cover') return draw(ctx, W, H, cover);
-      if (fit === 'contain') return draw(ctx, W, H, contain);
-      sctx.fillStyle = spec.output.background_color;
-      sctx.fillRect(0, 0, small.width, small.height);
-      sctx.filter = 'blur(5px)';
-      draw(sctx, small.width, small.height, Math.max(small.width / iw, small.height / ih) * 1.15);
-      sctx.filter = 'none';
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(small, 0, 0, W, H);
-      draw(ctx, W, H, contain);
-    };
+    const drawFit = createFitDrawer(ctx, W, H, spec.output.background_color);
     const subtitleAt = (tMs: number): WorkerSubtitleLayer | undefined =>
       subtitles.find((s) => tMs >= s.start_ms && tMs < s.end_ms);
     const allFrames = Array.from({ length: frames }, (_, i) => i);

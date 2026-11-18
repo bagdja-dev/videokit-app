@@ -2,17 +2,20 @@
 
 import type { Anchor } from '@/core/subtitle/ass';
 import { FONT_FAMILIES, findFamily } from '@/core/render/fonts';
-import type { SubtitleVideoProject } from '../model';
+import { MIN_STYLE_SLOTS, type SubtitleVideoProject } from '../model';
 import { useEditor } from '../store';
 import styles from './editor.module.css';
 
 export default function DesignPanel({ project }: { project: SubtitleVideoProject }) {
   const updateDesign = useEditor((s) => s.updateDesign);
   const updateSlot = useEditor((s) => s.updateSlot);
+  const { addSlot, removeSlot } = useEditor.getState();
   const d = project.design;
+  const maxLines = Math.max(1, ...project.cues.map((c) => c.lines.length));
+  const last = d.slots.length - 1;
   return (
-    <section className="vk-card">
-      <h2 className={styles.h2}>Desain subtitle</h2>
+    <section className="vk-card" data-role="display-panel">
+      <h2 className={styles.h2}>Posisi subtitle</h2>
       <div className={styles.grid3}>
         <label className={styles.field}>Posisi
           <select value={d.anchor} onChange={(e) => updateDesign({ anchor: e.target.value as Anchor })}>
@@ -26,6 +29,11 @@ export default function DesignPanel({ project }: { project: SubtitleVideoProject
           <input type="number" min={0} max={500} value={d.marginH} onChange={(e) => updateDesign({ marginH: +e.target.value })} />
         </label>
       </div>
+      <h2 className={styles.h2} style={{ marginTop: 20 }}>Gaya default per baris</h2>
+      <p className={styles.muted}>
+        Berlaku untuk semua cue. Gaya khusus satu cue diatur di tab Subtitle. Baris cue yang melebihi daftar ini memakai
+        gaya baris terakhir.
+      </p>
       <p className={styles.muted} style={{ marginTop: 8 }}>
         Huruf Korea, Jepang, dan Mandarin pada baris berfont Latin otomatis memakai Noto Sans yang sesuai. Font tersebut
         baru diunduh saat render bila dipakai (±5–9 MB per file, tersimpan di cache browser).
@@ -33,8 +41,15 @@ export default function DesignPanel({ project }: { project: SubtitleVideoProject
       {d.slots.map((s, i) => {
         const family = findFamily(s.font);
         return (
-          <fieldset key={i} style={{ border: '1px solid var(--vk-border)', borderRadius: 10, marginTop: 12, padding: 10 }}>
-            <legend className={styles.muted}>Baris {i + 1}</legend>
+          <fieldset key={i} data-slot={i + 1} style={{ border: '1px solid var(--vk-border)', borderRadius: 10, marginTop: 12, padding: 10 }}>
+            <legend className={styles.muted}>
+              Baris {i + 1}{i === last ? ` — juga dipakai baris ${i + 2} dst.` : ''}
+            </legend>
+            {i >= MIN_STYLE_SLOTS && (
+              <div className={styles.row} style={{ justifyContent: 'flex-end', marginBottom: 6 }}>
+                <button className={styles.linkBtn} onClick={() => removeSlot(i)}>Hapus gaya baris {i + 1}</button>
+              </div>
+            )}
             <div className={styles.grid3}>
               <label className={styles.field}>Nama bahasa
                 <input value={s.label} maxLength={30} onChange={(e) => updateSlot(i, { label: e.target.value })} />
@@ -78,6 +93,12 @@ export default function DesignPanel({ project }: { project: SubtitleVideoProject
           </fieldset>
         );
       })}
+      <div className={styles.row} style={{ marginTop: 12 }}>
+        <button className="vk-btn vk-btn-ghost" onClick={addSlot} data-role="add-slot">+ Tambah gaya baris {d.slots.length + 1}</button>
+        {maxLines > d.slots.length && (
+          <span className={styles.muted}>Ada cue dengan {maxLines} baris — baris {d.slots.length + 1}–{maxLines} saat ini memakai gaya baris {d.slots.length}.</span>
+        )}
+      </div>
     </section>
   );
 }
