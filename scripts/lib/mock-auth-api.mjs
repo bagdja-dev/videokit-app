@@ -3,6 +3,7 @@
 //   GET /auth/login  → set cookie sesi lalu 302 ke return_to (menggantikan perjalanan ke SSO Bagdja)
 //   GET /auth/logout → hapus cookie lalu 302 ke return_to
 //   /avatars*        → meniru kontrak videokit-api avatar (kuota, pending → confirm), file disimpan di memori
+//   /voice-presets*  → meniru kontrak videokit-api preset suara (nama unik, nilai 0 dibuang)
 //   PUT/GET /r2/:id  → meniru presigned storage
 // mode 'always' = selalu login (dipakai e2e:render yang hanya menguji mesin).
 import { randomUUID } from 'node:crypto';
@@ -14,6 +15,7 @@ export const MOCK_USER = { userId: '3f1c2a9e-8d4b-4c1e-9a7f-2b6d5e8c1a40', email
 export function startMockAuthApi({ mode = 'flow', appOrigin, avatarLimit = 2 }) {
   const stats = { logins: 0, vrmDownloads: 0 };
   const avatars = new Map(); // id → avatar
+  const voicePresets = new Map(); // id → preset suara
   const files = new Map(); // fileId → { mime, body }
   const base = `http://localhost:${MOCK_API_PORT}`;
   const readBody = (req) => new Promise((ok) => { const c = []; req.on('data', (d) => c.push(d)); req.on('end', () => ok(Buffer.concat(c))); });
@@ -116,6 +118,32 @@ export function startMockAuthApi({ mode = 'flow', appOrigin, avatarLimit = 2 }) 
       if (!action && req.method === 'DELETE') { a.deleted = true; files.delete(a.vrm); files.delete(a.thumb); return json(res, 200, { id: a.id, deleted: true }); }
       return json(res, 404, { message: 'route' });
     }
+    // --- /voice-presets (kontrak videokit-api)
+    if (url.pathname.startsWith('/voice-presets')) {
+      if (!loggedIn) return json(res, 401, { message: 'Belum login' });
+      const id = /^\/voice-presets\/([^/]+)$/.exec(url.pathname)?.[1];
+      const compact = (fx) => Object.fromEntries(Object.entries(fx ?? {}).filter(([, v]) => typeof v === 'number' && v !== 0));
+      const now = () => new Date().toISOString();
+      if (!id && req.method === 'GET') return json(res, 200, { items: [...voicePresets.values()].sort((a, b) => b.updated_at.localeCompare(a.updated_at)), limit: 20 });
+      if (!id && req.method === 'POST') {
+        const b = JSON.parse((await readBody(req)).toString());
+        if ([...voicePresets.values()].some((p) => p.name.toLowerCase() === String(b.name).trim().toLowerCase())) return json(res, 409, { message: `Preset bernama "${b.name}" sudah ada.` });
+        const p = { id: randomUUID(), name: String(b.name).trim(), fx: compact(b.fx), created_at: now(), updated_at: now() };
+        voicePresets.set(p.id, p);
+        return json(res, 200, p);
+      }
+      const p = id ? voicePresets.get(id) : undefined;
+      if (!p) return json(res, 404, { message: 'Preset tidak ditemukan' });
+      if (req.method === 'PATCH') {
+        const b = JSON.parse((await readBody(req)).toString());
+        if (b.name !== undefined) p.name = b.name;
+        if (b.fx !== undefined) p.fx = compact(b.fx);
+        p.updated_at = now();
+        return json(res, 200, p);
+      }
+      if (req.method === 'DELETE') { voicePresets.delete(id); return json(res, 200, { id, deleted: true }); }
+      return json(res, 404, { message: 'route' });
+    }
     if (url.pathname === '/auth/logout') {
       res.setHeader('Set-Cookie', 'vk_session=; Path=/; Max-Age=0');
       res.statusCode = 302;
@@ -125,7 +153,7 @@ export function startMockAuthApi({ mode = 'flow', appOrigin, avatarLimit = 2 }) 
     res.statusCode = 404;
     res.end();
   });
-  return new Promise((ok) => server.listen(MOCK_API_PORT, () => ok({ server, stats, avatars })));
+  return new Promise((ok) => server.listen(MOCK_API_PORT, () => ok({ server, stats, avatars, voicePresets })));
 }
 
 /** Env build agar app memanggil API tiruan. */

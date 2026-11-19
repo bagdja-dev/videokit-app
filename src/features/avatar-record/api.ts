@@ -1,5 +1,5 @@
 // Client videokit-api /avatars. Tipe = cerminan DTO C#-style di API (src/modules/avatar/dto/avatar.dto.ts) — jaga sinkron.
-import { apiUrl } from '@/core/auth/session';
+import { ApiError, apiCall } from '@/core/api/client';
 
 export type LicenseCommercial = 'allowed' | 'not_allowed' | 'unknown';
 
@@ -42,28 +42,8 @@ export interface CreateAvatarRequestDto {
   thumbnail_mime_type: 'image/png' | 'image/webp';
 }
 
-export class ApiError extends Error {
-  constructor(readonly status: number, message: string) { super(message); this.name = 'ApiError'; }
-}
-
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-  let res: Response;
-  try {
-    res = await fetch(`${apiUrl()}${path}`, {
-      method, credentials: 'include', cache: 'no-store',
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  } catch {
-    throw new ApiError(0, 'Server VideoKit tidak bisa dihubungi');
-  }
-  const data = (await res.json().catch(() => null)) as { message?: string | string[] } | null;
-  if (!res.ok) {
-    const msg = Array.isArray(data?.message) ? data!.message.join('; ') : data?.message;
-    throw new ApiError(res.status, res.status === 401 ? 'Sesi berakhir — silakan masuk lagi' : msg || `Permintaan gagal (${res.status})`);
-  }
-  return data as T;
-}
+export { ApiError };
+const call = apiCall;
 
 export const listAvatars = () => call<AvatarListResponseDto>('GET', '/avatars');
 export const createAvatar = (dto: CreateAvatarRequestDto) => call<CreateAvatarResponseDto>('POST', '/avatars', dto);

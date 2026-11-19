@@ -3,8 +3,8 @@ import { create } from 'zustand';
 import type { LineStyleOverride, SlotStyle, SubtitleDesign } from '@/core/subtitle/ass';
 import type { SrtCue } from '@/core/subtitle/srt';
 import {
-  clampCueTiming, defaultSlot, insertCueAt, insertCueRipple, MIN_STYLE_SLOTS, newId, shiftAllCues, shiftCuesFrom, type BackgroundMusic, type BackgroundVideo, type Cue, type CueAudio,
-  type CueVisual, type MediaRef, type OutputPreset, type SubtitleVideoProject,
+  clampCueTiming, defaultSlot, fitCueToDuration, insertCueAt, insertCueRipple, MIN_STYLE_SLOTS, newId, shiftAllCues, shiftCuesFrom, type BackgroundMusic, type BackgroundVideo, type Cue, type CueAudio,
+  type CueVisual, type MediaRef, type OutputPreset, type SubtitleVideoProject, type VoiceSettings,
 } from './model';
 import { saveProject } from './storage';
 
@@ -54,6 +54,8 @@ interface EditorState {
   setCueVisual(cueId: string, visual: CueVisual | undefined): void;
   extendVisualToNext(cueId: string): void;
   setCueAudio(cueId: string, audio: CueAudio | undefined): void;
+  /** Panjangkan cue sepanjang `durationMs` (cue sesudahnya bergeser bila perlu); satu langkah undo. */
+  fitCueToDuration(cueId: string, durationMs: number): void;
   updateDesign(patch: Partial<Omit<SubtitleDesign, 'slots'>>): void;
   updateSlot(index: number, patch: Partial<SlotStyle>): void;
   /** Tambah gaya default baris berikutnya (salinan gaya baris terakhir). */
@@ -63,6 +65,8 @@ interface EditorState {
   setMusic(music: BackgroundMusic | undefined): void;
   setBackgroundVideo(bg: BackgroundVideo | undefined): void;
   setDuckingLevel(level: number): void;
+  /** Efek suara narasi (preset + nilai efek); undefined = asli. */
+  setVoice(voice: VoiceSettings | undefined): void;
   addMedia(ref: MediaRef): void;
 }
 
@@ -199,6 +203,12 @@ export const useEditor = create<EditorState>((set, get) => {
       return mapCue(nxt.id, (c) => ({ ...c, visual }))(p);
     }),
     setCueAudio: (cueId, audio) => commit(mapCue(cueId, (c) => ({ ...c, audio }))),
+    fitCueToDuration: (cueId, durationMs) => {
+      const p = get().project;
+      if (!p) return;
+      const r = fitCueToDuration(p.cues, cueId, durationMs);
+      if (r.changed) commit((cur) => ({ ...cur, cues: r.cues }));
+    },
     updateDesign: (patch) => commit((p) => ({ ...p, design: { ...p.design, ...patch } })),
     updateSlot: (index, patch) => commit((p) => ({
       ...p, design: { ...p.design, slots: p.design.slots.map((s, i) => (i === index ? { ...s, ...patch } : s)) },
@@ -213,6 +223,7 @@ export const useEditor = create<EditorState>((set, get) => {
     setMusic: (music) => commit((p) => ({ ...p, music })),
     setBackgroundVideo: (bg) => commit((p) => ({ ...p, backgroundVideo: bg })),
     setDuckingLevel: (level) => commit((p) => ({ ...p, duckingLevel: level })),
+    setVoice: (voice) => commit((p) => ({ ...p, voice })),
     addMedia: (ref) => commit((p) => ({ ...p, media: { ...p.media, [ref.id]: ref } }), { history: false }),
   };
 });
