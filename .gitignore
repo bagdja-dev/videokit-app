@@ -3,7 +3,6 @@ node_modules/
 out/
 *.tsbuildinfo
 next-env.d.ts
-.env*
 !.env.example
 
 # hasil generate (npm run vendor / npm run samples / e2e)
@@ -16,3 +15,4 @@ certs/
 
 # paket font CJK (±36 MB) — diunduh oleh npm run vendor (scripts/fetch-fonts-cjk.mjs)
 public/fonts/cjk-v1/
+config.bat

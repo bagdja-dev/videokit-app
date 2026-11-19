@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { validateSpec } from '@/core/render';
-import { createProject, type SubtitleVideoProject } from '../model';
-import { buildRenderJob, TAIL_MS } from '../spec-builder';
+import { createProject, VOICE_PRESETS, type SubtitleVideoProject } from '../model';
+import { buildRenderJob, projectDuration, TAIL_MS } from '../spec-builder';
 
 function project(): SubtitleVideoProject {
   const p = createProject('Uji', '9x16');
@@ -56,5 +56,31 @@ describe('buildRenderJob', () => {
 
   it('menolak project tanpa cue', () => {
     expect(() => buildRenderJob(createProject('x', '16x9'))).toThrow(/SRT/);
+  });
+});
+
+describe('efek suara narasi', () => {
+  it('fx hanya dipasang ke track voice; preset asli / nilai nol → tanpa fx', () => {
+    const p = project();
+    p.music = { mediaId: 'bgm', volume: 0.8 };
+    expect(buildRenderJob(p).spec.audio_tracks.every((a) => !a.fx)).toBe(true);
+    p.voice = { preset: 'clear', fx: { ...VOICE_PRESETS.clear.fx } };
+    const tracks = buildRenderJob(p).spec.audio_tracks;
+    expect(tracks.find((a) => a.role === 'voice')?.fx).toEqual(VOICE_PRESETS.clear.fx);
+    expect(tracks.find((a) => a.role === 'background')?.fx).toBeUndefined();
+    p.voice = { preset: 'custom', fx: { warmth_db: 0, reverb: 0 } };
+    expect(buildRenderJob(p).spec.audio_tracks.every((a) => !a.fx)).toBe(true);
+  });
+});
+
+describe('durasi video & ekor gema', () => {
+  it('cue terakhir bernarasi + gema ujung kalimat → video diperpanjang', () => {
+    const p = project();
+    p.cues[2] = { ...p.cues[2]!, audio: { mediaId: 'vo', volume: 1 } };
+    expect(projectDuration(p)).toBe(9000 + TAIL_MS);
+    p.voice = { preset: 'custom', fx: { end_echo: 0.5, end_echo_delay_ms: 400 } };
+    expect(projectDuration(p)).toBe(9000 + 4 * 400 + 100);
+    p.cues[2] = { ...p.cues[2]!, audio: undefined };
+    expect(projectDuration(p)).toBe(9000 + TAIL_MS);
   });
 });

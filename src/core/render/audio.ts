@@ -3,6 +3,7 @@
 import { backgroundEnvelope } from './envelope';
 import type { AudioTrack, RenderSources, RenderSpecV1 } from './types';
 import { isColorSegment } from './types';
+import { hasVoiceFx, processVoiceBuffer } from './voice-fx';
 
 export const AUDIO_SAMPLE_RATE = 48_000;
 const CHUNK_SECONDS = 20;
@@ -52,7 +53,15 @@ async function schedule(spec: RenderSpecV1, sources: RenderSources): Promise<Sch
     const buf = await get(v.input);
     const end = Math.min(v.end_ms ?? v.start_ms + buf.duration * 1000, spec.output.duration_ms);
     voiceDur.set(v, end - v.start_ms);
-    out.push({ buffer: buf, at: v.start_ms / 1000, offset: 0, length: (end - v.start_ms) / 1000, loop: false, volume: v.volume ?? 1 });
+    const lengthS = (end - v.start_ms) / 1000;
+    if (hasVoiceFx(v.fx) && lengthS > 0) {
+      // Efek diproses per klip lebih dulu; ekor gema boleh melewati akhir cue, tapi tidak melewati akhir video.
+      const fxBuf = await processVoiceBuffer(buf, v.fx, 0, Math.min(lengthS, buf.duration));
+      const len = Math.min(fxBuf.duration, durationS - v.start_ms / 1000);
+      out.push({ buffer: fxBuf, at: v.start_ms / 1000, offset: 0, length: len, loop: false, volume: v.volume ?? 1 });
+      continue;
+    }
+    out.push({ buffer: buf, at: v.start_ms / 1000, offset: 0, length: lengthS, loop: false, volume: v.volume ?? 1 });
   }
   // Audio asli klip (keep_audio) ikut men-duck musik latar seperti voice.
   const duckers: AudioTrack[] = [...voices];

@@ -3,6 +3,7 @@
 // sebelum cue pertama memakai visual cue pertama. Cue tanpa visual → video latar, atau warna latar.
 import { buildAss } from '@/core/subtitle/ass';
 import { fontSetOf } from '@/core/render/fonts';
+import { hasVoiceFx, voiceTailMs } from '@/core/render/voice-fx';
 import type { AudioTrack, RenderSpecV1, VideoSegment } from '@/core/render';
 import { OUTPUT_PRESETS, type Cue, type SubtitleVideoProject } from './model';
 
@@ -31,7 +32,11 @@ const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
 
 export function projectDuration(p: SubtitleVideoProject): number {
   const last = p.cues.reduce((m, c) => Math.max(m, c.end_ms), 0);
-  return last > 0 ? last + TAIL_MS : 0;
+  if (last <= 0) return 0;
+  // Cue terakhir bernarasi + efek bergema → video diperpanjang agar ekor gema tidak terpotong.
+  const lastHasAudio = p.cues.some((c) => c.end_ms === last && c.audio);
+  const fxTail = lastHasAudio && p.voice && hasVoiceFx(p.voice.fx) ? voiceTailMs(p.voice.fx) : 0;
+  return last + Math.max(TAIL_MS, fxTail);
 }
 
 /** Ukuran/garis override ikut diskalakan untuk pratinjau resolusi kecil (sama seperti gaya slot). */
@@ -88,11 +93,12 @@ export function buildRenderJob(p: SubtitleVideoProject, opts: BuildOptions = {})
   // --- Audio
   const duration = to - from;
   const audio: AudioTrack[] = [];
+  const voiceFx = p.voice && hasVoiceFx(p.voice.fx) ? p.voice.fx : undefined;
   for (const c of cues) {
     if (!c.audio || c.end_ms <= from || c.start_ms >= to) continue;
     requireMedia(c.audio.mediaId);
     // TODO pratinjau di tengah cue: audio cue dimulai dari awal, bukan dari titik tengah (diterima untuk MVP)
-    audio.push({ input: c.audio.mediaId, role: 'voice', start_ms: shift(c.start_ms), end_ms: shift(c.end_ms), volume: c.audio.volume });
+    audio.push({ input: c.audio.mediaId, role: 'voice', start_ms: shift(c.start_ms), end_ms: shift(c.end_ms), volume: c.audio.volume, ...(voiceFx ? { fx: voiceFx } : {}) });
   }
   const bgCommon = { start_ms: 0, loop: true, fade_in_ms: from === 0 ? 500 : 0, fade_out_ms: to === full ? 1500 : 0, ducking: { level: p.duckingLevel, ...DUCKING } };
   if (p.music) {

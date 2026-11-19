@@ -49,6 +49,35 @@ export interface Ducking {
   release_ms: number;
 }
 
+/**
+ * Efek suara narasi (hanya track role `voice`). Semua opsional; 0/tidak ada = mati.
+ * Dirender dengan rangkaian Web Audio yang sama di pratinjau & render (lihat voice-fx.ts).
+ */
+export interface VoiceFx {
+  /** Potong frekuensi rendah (dengung, getaran meja); 0 = mati. Umumnya 70–120. */
+  highpass_hz?: number;
+  /** Low-shelf 180 Hz (dB): + lebih hangat/berat, − lebih tipis. */
+  warmth_db?: number;
+  /** Peaking 3,5 kHz (dB): + lebih jelas/maju. */
+  clarity_db?: number;
+  /** High-shelf 8,5 kHz (dB): + lebih cerah, − kurangi desis "s". */
+  air_db?: number;
+  /** Kompresi 0..1: meratakan suara pelan & keras (dengan kompensasi volume). */
+  compress?: number;
+  /** Penguatan akhir (dB). */
+  gain_db?: number;
+  /** Gema ruangan 0..1. */
+  reverb?: number;
+  /** Geser nada (semiton) tanpa mengubah tempo: + lebih ringan/tinggi, − lebih berat/rendah. */
+  pitch_semitones?: number;
+  /** Ketebalan suara (formant) −1…+1 tanpa mengubah nada: + lebih tebal, − lebih tipis. */
+  formant?: number;
+  /** Gema di ujung kalimat 0..1: kata terakhir tiap klip narasi dipantulkan beberapa kali. */
+  end_echo?: number;
+  /** Jarak antar-pantulan gema ujung kalimat (ms), default 350. */
+  end_echo_delay_ms?: number;
+}
+
 export interface AudioTrack {
   /** Input audio, atau video (memakai track audionya, mis. audio video latar). */
   input: string;
@@ -62,6 +91,8 @@ export interface AudioTrack {
   fade_in_ms?: number;
   fade_out_ms?: number;
   ducking?: Ducking;
+  /** Efek suara (hanya role `voice`). */
+  fx?: VoiceFx;
 }
 
 /**

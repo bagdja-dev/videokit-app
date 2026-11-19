@@ -4,7 +4,7 @@
 // tetapi visual diputar dari <video> biasa sehingga bisa langsung dimainkan/digeser. Akurat secara tampilan;
 // pergantian klip bisa terlambat sepersekian detik (render akhir tetap per-frame tepat).
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createFitDrawer, fontsForAss, loadFonts, renderSubtitleLayers, sourceTimeFor, type SubtitleLayer } from '@/core/render';
+import { buildVoiceChain, createFitDrawer, fontsForAss, hasVoiceFx, preFxFromKey, preFxKey, preFxOf, preprocessedWav, voiceTailMs, loadFonts, renderSubtitleLayers, sourceTimeFor, type SubtitleLayer, type VoiceChain } from '@/core/render';
 import { isColorSegment, type MediaSegment } from '@/core/render/types';
 import { OUTPUT_PRESETS, type SubtitleVideoProject } from '../model';
 import { formatTime, usePlayback } from '../playback';
@@ -19,7 +19,8 @@ const SUB_STEP_MS = 45_000, SUB_BEFORE_MS = 15_000, SUB_AFTER_MS = 60_000;
 
 const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
 
-interface Voice { key: string; input: string; start: number; end: number; offsetS: number; loop: boolean; volume: number; background: boolean }
+/** `narration` = audio cue (role voice): dilewatkan ke rangkaian efek suara narasi. */
+interface Voice { key: string; input: string; start: number; end: number; offsetS: number; loop: boolean; volume: number; background: boolean; narration: boolean }
 
 /** Object URL untuk file media lokal (IndexedDB), dibuat sesuai kebutuhan dan dicabut saat unmount. */
 function useMediaUrls(ids: string[]): Record<string, string> {
@@ -95,16 +96,66 @@ export default function LivePlayer({ project }: { project: SubtitleVideoProject 
     if (!job) return [];
     const spec = job.spec, out: Voice[] = [];
     spec.audio_tracks.forEach((a, i) => out.push({
-      key: `a${i}:${a.input}`, input: a.input, start: a.start_ms, end: a.end_ms ?? (a.loop ? duration : Number.POSITIVE_INFINITY),
-      offsetS: 0, loop: !!a.loop, volume: a.volume ?? 1, background: a.role === 'background',
+      key: `a${i}:${a.role}:${a.input}`, input: a.input, start: a.start_ms,
+      // Narasi bergema: biarkan berbunyi sampai ekor gema selesai (sama dengan render).
+      end: (a.end_ms ?? (a.loop ? duration : Number.POSITIVE_INFINITY)) + (a.role === 'voice' ? voiceTailMs(a.fx) : 0),
+      offsetS: 0, loop: !!a.loop, volume: a.volume ?? 1, background: a.role === 'background', narration: a.role === 'voice',
     }));
     spec.video_track.forEach((s, i) => {
       if (isColorSegment(s) || !s.keep_audio) return;
-      out.push({ key: `k${i}:${s.input}`, input: s.input, start: s.start_ms, end: s.end_ms, offsetS: (s.source_in_ms ?? 0) / 1000, loop: s.underflow === 'loop', volume: 1, background: false });
+      out.push({ key: `k${i}:${s.input}`, input: s.input, start: s.start_ms, end: s.end_ms, offsetS: (s.source_in_ms ?? 0) / 1000, loop: s.underflow === 'loop', volume: 1, background: false, narration: false });
     });
     return out;
   }, [job, duration]);
   const ducking = job?.spec.audio_tracks.find((a) => a.ducking)?.ducking?.level ?? 1;
+
+  // ── Efek suara narasi: audio cue → gain per elemen → bus → rangkaian efek (sama dengan render) → speaker.
+  const voiceFx = job?.spec.audio_tracks.find((a) => a.role === 'voice' && a.fx)?.fx;
+  const fxKey = hasVoiceFx(voiceFx) ? JSON.stringify(voiceFx) : '';
+  const bus = useRef<{ ctx: AudioContext; input: GainNode; chain: VoiceChain | null; fxKey: string } | null>(null);
+  const routed = useRef(new Map<string, GainNode>());
+  const connectBus = (b: NonNullable<typeof bus.current>, key: string) => {
+    b.input.disconnect();
+    b.chain?.disconnect();
+    b.chain = key ? buildVoiceChain(b.ctx, JSON.parse(key)) : null;
+    if (b.chain) { b.input.connect(b.chain.input); b.chain.output.connect(b.ctx.destination); }
+    else b.input.connect(b.ctx.destination);
+    b.fxKey = key;
+  };
+  const fxKeyRef = useRef(fxKey);
+  useEffect(() => {
+    fxKeyRef.current = fxKey;
+    if (bus.current && bus.current.fxKey !== fxKey) connectBus(bus.current, fxKey);
+  }, [fxKey]);
+  useEffect(() => () => { void bus.current?.ctx.close().catch(() => undefined); }, []);
+
+  // Nada & ketebalan tidak bisa real-time lewat node Web Audio → narasi diproses dulu jadi WAV baru (sama dengan
+  // render), lalu diputar seperti biasa. Selama diproses, narasi belum berbunyi.
+  const pitch = preFxKey(preFxOf(voiceFx));
+  const narrationIds = useMemo(() => [...new Set(voices.filter((v) => v.narration).map((v) => v.input))].join('|'), [voices]);
+  const [pitched, setPitched] = useState<{ pitch: string; urls: Record<string, string> }>({ pitch: '', urls: {} });
+  const pitchedRef = useRef(pitched);
+  useEffect(() => {
+    if (!pitch) return;
+    let alive = true;
+    const t = setTimeout(() => void (async () => {
+      const next: Record<string, string> = {};
+      for (const id of narrationIds ? narrationIds.split('|') : []) {
+        const blob = await loadMedia(id);
+        if (!alive) break;
+        if (!blob) continue;
+        const wav = await preprocessedWav(blob, preFxFromKey(pitch)!).catch(() => null);
+        if (wav && alive) next[id] = URL.createObjectURL(wav);
+        await new Promise((r) => setTimeout(r, 0)); // beri jeda ke UI antar klip
+      }
+      if (!alive) { Object.values(next).forEach((u) => URL.revokeObjectURL(u)); return; }
+      Object.values(pitchedRef.current.urls).forEach((u) => URL.revokeObjectURL(u));
+      pitchedRef.current = { pitch, urls: next };
+      setPitched(pitchedRef.current);
+    })(), 300);
+    return () => { alive = false; clearTimeout(t); };
+  }, [pitch, narrationIds]);
+  useEffect(() => () => Object.values(pitchedRef.current.urls).forEach((u) => URL.revokeObjectURL(u)), []);
 
   useEffect(() => () => {
     for (const v of videos.current.values()) { v.pause(); v.removeAttribute('src'); v.load(); }
@@ -135,9 +186,33 @@ export default function LivePlayer({ project }: { project: SubtitleVideoProject 
       if (!im && urls[id]) { im = new Image(); im.src = urls[id]!; images.current.set(id, im); }
       return im;
     };
+    const srcFor = (v: Voice) => (v.narration && pitch ? (pitched.pitch === pitch ? pitched.urls[v.input] : undefined) : urls[v.input]);
+    const elKey = (v: Voice) => `${v.key}|${srcFor(v) ?? ''}`;
+    // Elemen yang sumbernya sudah berganti (mis. nada diubah) dihentikan & dilepas.
+    const want = new Set(voices.map(elKey));
+    for (const [k, a] of audios.current) {
+      if (want.has(k)) continue;
+      a.pause(); a.removeAttribute('src');
+      audios.current.delete(k);
+      routed.current.get(k)?.disconnect();
+      routed.current.delete(k);
+    }
     const getAudio = (v: Voice) => {
-      let a = audios.current.get(v.key);
-      if (!a && urls[v.input]) { a = new Audio(urls[v.input]!); a.preload = 'auto'; audios.current.set(v.key, a); }
+      const key = elKey(v), src = srcFor(v);
+      let a = audios.current.get(key);
+      if (!a && src) {
+        a = new Audio(src); a.preload = 'auto'; audios.current.set(key, a);
+        if (v.narration) {
+          if (!bus.current) {
+            const ctx = new AudioContext();
+            bus.current = { ctx, input: ctx.createGain(), chain: null, fxKey: '' };
+            connectBus(bus.current, fxKeyRef.current);
+          }
+          const g = bus.current.ctx.createGain();
+          bus.current.ctx.createMediaElementSource(a).connect(g).connect(bus.current.input);
+          routed.current.set(key, g);
+        }
+      }
       return a;
     };
     /** Selaraskan <video> dengan waktu sumber yang diharapkan; toleransi lebih longgar saat main. */
@@ -207,7 +282,9 @@ export default function LivePlayer({ project }: { project: SubtitleVideoProject 
         let local = (t - v.start) / 1000 + v.offsetS;
         if (v.loop && a.duration > 0) local %= a.duration;
         else if (a.duration > 0 && local >= a.duration) { if (!a.paused) a.pause(); continue; }
-        a.volume = Math.max(0, Math.min(1, v.volume * (v.background && voiceActive ? ducking : 1)));
+        const g = routed.current.get(elKey(v));
+        if (g) { a.volume = 1; if (g.gain.value !== v.volume) g.gain.value = v.volume; }
+        else a.volume = Math.max(0, Math.min(1, v.volume * (v.background && voiceActive ? ducking : 1)));
         if (a.paused) { a.currentTime = local; void a.play().catch(() => undefined); }
         else if (Math.abs(a.currentTime - local) > 0.3) a.currentTime = local;
       }
@@ -217,12 +294,12 @@ export default function LivePlayer({ project }: { project: SubtitleVideoProject 
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [job, urls, voices, ducking, W, H, duration]);
+  }, [job, urls, voices, ducking, W, H, duration, pitch, pitched]);
 
   // Mulai/jeda: jangkar jam di posisi sekarang.
   useEffect(() => {
     const k = clock.current;
-    if (playing) { k.base = k.paused; k.at = performance.now(); }
+    if (playing) { k.base = k.paused; k.at = performance.now(); void bus.current?.ctx.resume().catch(() => undefined); }
     else for (const a of audios.current.values()) a.pause();
   }, [playing]);
 
