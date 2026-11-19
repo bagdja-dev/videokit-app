@@ -18,7 +18,9 @@ export default function SideModal({ open, title, onClose, children, role }: {
     if (!open && d.open) d.close();
   }, [open]);
   return (
-    <dialog ref={ref} className={styles.sideModal} onClose={onClose} onCancel={onClose} aria-label={title} data-role={role}
+    // Event `close` datang setelah d.close() kita sendiri (tertunda); abaikan bila modal memang sudah ditutup lewat
+    // prop — kalau tidak, event yang terlambat bisa ikut menutup modal lain yang baru dibuka (state modal dipakai bersama).
+    <dialog ref={ref} className={styles.sideModal} onClose={() => { if (open) onClose(); }} onCancel={onClose} aria-label={title} data-role={role}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className={styles.sideModalInner}>
         <div className={styles.dialogHead}>
