@@ -173,3 +173,48 @@
   position: sticky; top: 0; z-index: 2; background: var(--vk-surface);
   padding: 4px 0 8px; margin-bottom: -4px; border-bottom: 1px solid var(--vk-border);
 }
+
+/* Audio cue: sumber Unggah / Rekam / Generate */
+.segmented { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 3px; border: 1px solid var(--vk-border); border-radius: 8px; background: var(--vk-bg); }
+.segBtn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 4px; border: 0; border-radius: 6px; background: transparent; color: var(--vk-text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.segBtn:disabled { color: var(--vk-muted); cursor: not-allowed; }
+.segActive { background: var(--vk-surface); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); color: var(--vk-primary); }
+.soon { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 999px; background: var(--vk-primary-soft); color: var(--vk-primary); }
+.recorder { display: grid; gap: 8px; }
+.recBtn { background: #dc2626; border-color: #dc2626; color: #fff; }
+.recBtn:disabled { opacity: 0.6; }
+.recStop { background: var(--vk-text); border-color: var(--vk-text); color: var(--vk-surface); }
+.recTime { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; color: var(--vk-text); }
+.recDot { width: 10px; height: 10px; border-radius: 50%; background: #dc2626; animation: vkRecBlink 1s steps(2, start) infinite; }
+@keyframes vkRecBlink { to { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .recDot { animation: none; } }
+.meter { flex: 1; min-width: 80px; height: 6px; border-radius: 3px; background: var(--vk-border); overflow: hidden; }
+.meter > span { display: block; height: 100%; background: #16a34a; transition: width 60ms linear; }
+.prompter { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--vk-border); background: var(--vk-surface); }
+.prompter p { margin: 0; }
+.prompterMain { font-size: 18px; font-weight: 700; color: var(--vk-text); line-height: 1.35; }
+.audioCurrent { display: grid; gap: 6px; padding: 8px 10px; border-radius: 8px; background: var(--vk-bg); border: 1px solid var(--vk-border); }
+.audioName { color: var(--vk-text); overflow-wrap: anywhere; }
+.fitHint { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--vk-text); }
+
+/* Setting → Suara narasi */
+.presetGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.presetBtn { display: grid; gap: 2px; text-align: left; padding: 8px 10px; border: 1px solid var(--vk-border); border-radius: 8px; background: var(--vk-surface); color: var(--vk-text); font: inherit; font-size: 13px; cursor: pointer; }
+.presetBtn span { color: var(--vk-muted); font-size: 12px; }
+.presetActive { border-color: var(--vk-primary); box-shadow: inset 0 0 0 1px var(--vk-primary); }
+.presetActive strong { color: var(--vk-primary); }
+.tryBox { display: grid; gap: 8px; padding: 10px; border-radius: 8px; background: var(--vk-bg); border: 1px solid var(--vk-border); margin: 12px 0; }
+.knobs { display: grid; gap: 12px; }
+.knob { display: grid; gap: 2px; font-size: 13px; color: var(--vk-text); }
+.knob input[type='range'] { width: 100%; }
+.knobHead { display: flex; justify-content: space-between; font-weight: 600; }
+.knobHead output { font-weight: 400; color: var(--vk-muted); font-variant-numeric: tabular-nums; }
+.knobHint { font-size: 12px; color: var(--vk-muted); }
+.tryTitle { font-size: 14px; color: var(--vk-text); }
+.warn { font-size: 13px; color: #b45309; }
+.meter[data-hot] > span { background: #dc2626; }
+.knobOff { opacity: 0.5; }
+.myPresets { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.myPreset { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--vk-border); border-radius: 8px; background: var(--vk-surface); }
+.myPresetApply { flex: 1; min-width: 0; text-align: left; border: 0; background: none; color: var(--vk-text); font: inherit; font-size: 13px; cursor: pointer; padding: 2px 0; overflow-wrap: anywhere; }
+.presetName { flex: 1; min-width: 160px; font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--vk-border); border-radius: 6px; background: var(--vk-surface); color: var(--vk-text); }

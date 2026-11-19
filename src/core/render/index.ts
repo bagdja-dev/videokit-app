@@ -14,3 +14,5 @@ export type { RenderOptions } from './render';
 export { makeVideoWorkingCopy, makeImageWorkingCopy } from './working-copy';
 export type { WorkingCopyResult, WorkingCopyTarget } from './working-copy';
 export { deleteRender, pruneRenders } from './opfs';
+export { buildVoiceChain, processVoiceBuffer, hasVoiceFx, preFxOf, preFxKey, preFxFromKey, preprocessBuffer, preprocessedWav, voiceTailMs, REVERB_TAIL_S } from './voice-fx';
+export type { VoiceChain, PreFx } from './voice-fx';

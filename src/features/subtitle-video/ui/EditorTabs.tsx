@@ -6,13 +6,15 @@ import { useState } from 'react';
 import { FONT_FAMILIES, findFamily, type Fit, type Underflow } from '@/core/render';
 import type { LineStyleOverride } from '@/core/subtitle/ass';
 import { formatMs } from '../media';
-import { OUTPUT_PRESETS, sortCues, type Cue, type OutputPreset, type SubtitleVideoProject } from '../model';
+import { OUTPUT_PRESETS, sortCues, VOICE_PRESETS, type Cue, type OutputPreset, type SubtitleVideoProject } from '../model';
 import { usePlayback } from '../playback';
 import { useEditor } from '../store';
 import AudioBackgroundPanel from './AudioBackgroundPanel';
+import CueAudioField from './CueAudioField';
 import DesignPanel from './DesignPanel';
 import MediaButton from './MediaButton';
 import SideModal from './SideModal';
+import VoicePanel from './VoicePanel';
 import styles from './editor.module.css';
 
 type Tab = 'setting' | 'subtitle' | 'visual';
@@ -128,11 +130,10 @@ function SubtitleTab({ project }: { project: SubtitleVideoProject }) {
 }
 
 function VisualTab({ project }: { project: SubtitleVideoProject }) {
-  const { cue, isLast } = useSelectedCue(project);
-  const { setCueVisual, setCueAudio, extendVisualToNext } = useEditor.getState();
+  const { cue, index, isLast } = useSelectedCue(project);
+  const { setCueVisual, extendVisualToNext } = useEditor.getState();
   if (!cue) return <NoCue />;
   const visualRef = cue.visual ? project.media[cue.visual.mediaId] : undefined;
-  const audioRef = cue.audio ? project.media[cue.audio.mediaId] : undefined;
   return (
     <div className={styles.tabBody} data-role="visual-editor">
       <p className={styles.muted}>Visual tampil dari awal cue ini sampai cue berikutnya. Pratinjau di kiri menunjukkan teks di atas visual.</p>
@@ -172,28 +173,21 @@ function VisualTab({ project }: { project: SubtitleVideoProject }) {
           {!isLast && <button className="vk-btn vk-btn-ghost" onClick={() => extendVisualToNext(cue.id)}>Lanjutkan ke cue berikutnya</button>}
         </div>
       )}
-      <div className={styles.field}>Audio cue (narasi/efek)
-        <div className={styles.mediaRow}>
-          <MediaButton label={audioRef ? 'Ganti audio' : 'Pilih audio'} kinds={['audio']}
-            onPicked={(ref) => setCueAudio(cue.id, { mediaId: ref.id, volume: cue.audio?.volume ?? 1 })} />
-          {audioRef && <span>{audioRef.name}</span>}
-          {cue.audio && (
-            <>
-              <label className={styles.check}>Volume
-                <input type="range" min={0} max={1.5} step={0.05} value={cue.audio.volume} onChange={(e) => setCueAudio(cue.id, { ...cue.audio!, volume: +e.target.value })} />
-              </label>
-              <button className="vk-btn vk-btn-ghost" onClick={() => setCueAudio(cue.id, undefined)}>Hapus</button>
-            </>
-          )}
-        </div>
-      </div>
+      <CueAudioField key={cue.id} project={project} cue={cue} cueNumber={index + 1} />
     </div>
   );
 }
 
+function voiceLabel(v: SubtitleVideoProject['voice']): string {
+  if (!v) return 'asli (tanpa efek)';
+  if (v.preset === 'saved') return `preset "${v.savedName ?? 'saya'}"`;
+  if (v.preset === 'custom') return v.savedName ? `kustom (dari "${v.savedName}")` : 'kustom';
+  return VOICE_PRESETS[v.preset].label;
+}
+
 function SettingTab({ project }: { project: SubtitleVideoProject }) {
   const { setPreset, setBackgroundColor } = useEditor.getState();
-  const [modal, setModal] = useState<'subtitle' | 'audio' | null>(null);
+  const [modal, setModal] = useState<'subtitle' | 'audio' | 'voice' | null>(null);
   const d = project.design;
   const music = project.music, bg = project.backgroundVideo;
   const mediaName = (id?: string) => (id ? project.media[id]?.name ?? '—' : '—');
@@ -234,11 +228,25 @@ function SettingTab({ project }: { project: SubtitleVideoProject }) {
         {(music || bg?.withAudio) && <span className={styles.muted}>Ducking: {Math.round(project.duckingLevel * 100)}%</span>}
       </div>
 
+      <div className={styles.summary} data-role="summary-voice">
+        <div className={styles.summaryHead}>
+          <strong>Suara narasi</strong>
+          <button className="vk-btn vk-btn-ghost" onClick={() => setModal('voice')} data-role="open-voice">Atur</button>
+        </div>
+        <span className={styles.muted}>
+          Efek: {voiceLabel(project.voice)}
+          {' · '}{project.cues.filter((c) => c.audio).length} cue beraudio
+        </span>
+      </div>
+
       <SideModal open={modal === 'subtitle'} onClose={() => setModal(null)} title="Subtitle global" role="subtitle-global-modal">
         <DesignPanel project={project} />
       </SideModal>
       <SideModal open={modal === 'audio'} onClose={() => setModal(null)} title="Latar & audio" role="audio-modal">
         <AudioBackgroundPanel project={project} />
+      </SideModal>
+      <SideModal open={modal === 'voice'} onClose={() => setModal(null)} title="Suara narasi" role="voice-modal">
+        <VoicePanel project={project} />
       </SideModal>
     </div>
   );

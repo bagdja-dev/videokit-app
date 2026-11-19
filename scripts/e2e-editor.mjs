@@ -33,7 +33,7 @@ const server = createServer((req, res) => {
 await new Promise((ok) => server.listen(PORT, ok));
 const mockApi = await startMockAuthApi({ mode: 'flow', appOrigin: `http://localhost:${PORT}` });
 const profile = mkdtempSync(join(process.env.TMPDIR ?? tmpdir(), 'vk-ed-'));
-const chrome = spawn(CHROME, ['--headless=new', `--user-data-dir=${profile}`, `--remote-debugging-port=${DEBUG}`, '--no-first-run', 'about:blank'], { stdio: 'ignore' });
+const chrome = spawn(CHROME, ['--headless=new', `--user-data-dir=${profile}`, `--remote-debugging-port=${DEBUG}`, '--no-first-run', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', 'about:blank'], { stdio: 'ignore' });
 const fail = (m) => { console.error('GAGAL:', m); chrome.kill(); server.close(); mockApi.server.close(); process.exit(1); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -97,6 +97,7 @@ await setFile('input[aria-label="Unggah file SRT"]', srtPath);
 const cueCount = `document.querySelectorAll('[data-cue]').length`;
 await waitFor(`${cueCount} === 10`, '10 cue di timeline');
 
+const cueStart = (n) => ev(`(()=>{const t=document.querySelector('[data-cue="${n}"]').title;return t.split(' · ')[1].split('–')[0];})()`);
 const undo = async () => {
   await ev(`document.activeElement?.blur()`);
   await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'z', code: 'KeyZ', modifiers: 4, windowsVirtualKeyCode: 90 });
@@ -129,6 +130,31 @@ await waitFor(`!!document.querySelector('[data-cue="7"][data-selected]')`, 'cue 
 await pickVisual('video/*,image/*', sample('clip_hevc.mp4'));
 await waitFor(`document.body.innerText.includes('clip_hevc.mp4')`, 'visual cue 7');
 
+step('cue 2: audio cue — 3 sumber (Generate nonaktif), rekam dari mikrofon → WAV, panjangkan cue sesuai audio, undo');
+await selectCue(2);
+await waitFor(`!!document.querySelector('[data-cue="2"][data-selected]')`, 'cue 2 terpilih');
+const srcState = await ev(`[...document.querySelectorAll('[data-role="cue-audio"] [data-source]')].map(b=>b.dataset.source+':'+(b.disabled?'off':'on')).join(',')`);
+if (srcState !== 'upload:on,record:on,generate:off') fail(`sumber audio cue: ${srcState}`);
+await ev(`document.querySelector('[data-source="record"]').click()`);
+await waitFor(`!!document.querySelector('[data-role="record-start"]')`, 'tombol rekam');
+await ev(`document.querySelector('[data-role="record-start"]').click()`);
+await waitFor(`!!document.querySelector('[data-role="record-stop"]')`, 'sedang merekam', 10_000);
+const prompter = await ev(`document.querySelector('[data-role="cue-recorder"]').innerText`);
+if (!prompter.includes('Pilih produk favoritmu')) fail('teks cue tidak tampil saat merekam');
+await sleep(3800);
+await ev(`document.querySelector('[data-role="record-stop"]').click()`);
+await waitFor(`document.body.innerText.includes('rekaman-cue-2.wav')`, 'rekaman tersimpan', 15_000);
+await waitFor(`!!document.querySelector('[data-role="audio-overflow"]')`, 'peringatan audio lebih panjang dari cue', 5000);
+const recC3Before = await cueStart(3);
+await ev(`document.querySelector('[data-role="fit-cue-to-audio"]').click()`);
+await sleep(300);
+const recC3After = await cueStart(3);
+if (!(recC3After > recC3Before) || await ev(`!!document.querySelector('[data-role="audio-overflow"]')`)) fail(`panjangkan cue: cue 3 ${recC3Before} → ${recC3After}`);
+await undo();
+if ((await cueStart(3)) !== recC3Before) fail('undo panjangkan cue');
+await selectCue(2);
+if (!(await ev(`document.body.innerText.includes('rekaman-cue-2.wav')`))) fail('rekaman hilang setelah undo panjangkan cue');
+
 const closeModal = () => ev(`[...document.querySelectorAll('dialog[open] button')].find(b=>b.textContent==='Selesai').click()`);
 step('tab Setting → modal Latar & audio: musik + video latar dengan audio');
 await tab('Setting');
@@ -148,6 +174,70 @@ for (const [name, w, h] of [['editor-v2-modal', 1440, 1000]]) {
 await cdp('Emulation.clearDeviceMetricsOverride');
 await closeModal();
 await waitFor(`!document.querySelector('dialog[open]') && document.querySelector('[data-role="summary-audio"]').innerText.includes('clip_bg.mp4') && document.querySelector('[data-role="summary-audio"]').innerText.includes('dengan audio')`, 'ringkasan latar & audio', 5000);
+
+step('Setting → modal Suara narasi: preset Pendongeng, coba dengar audio cue + bandingkan asli, rekam sampel (teks cue, peredam bising off) → langsung diputar, ubah slider → kustom, nada +2 & ketebalan +40% & gema ujung kalimat saat diputar, preset akun simpan/pakai/perbarui');
+await tab('Setting');
+await waitFor(`document.querySelector('[data-role="summary-voice"]')?.innerText.includes('asli')`, 'ringkasan suara narasi');
+await ev(`document.querySelector('[data-role="open-voice"]').click()`);
+await waitFor(`!!document.querySelector('dialog[open][data-role="voice-modal"]')`, 'modal suara narasi', 5000);
+await ev(`document.querySelector('[data-preset="storyteller"]').click()`);
+await waitFor(`document.querySelector('[data-preset="storyteller"]').getAttribute('aria-checked')==='true'`, 'preset pendongeng', 3000);
+await ev(`document.querySelector('[data-role="voice-try-play"]').click()`);
+await waitFor(`document.querySelector('[data-role="voice-try-play"]').textContent.includes('Stop')`, 'coba dengar berjalan', 10_000);
+await ev(`document.querySelector('[data-role="voice-bypass"]').click()`);
+await sleep(300);
+await ev(`document.querySelector('[data-role="voice-bypass"]').click()`);
+await ev(`document.querySelector('[data-role="voice-try-play"]').click()`);
+await ev(`document.querySelector('[data-try-source="sample"]').click()`);
+await waitFor(`!!document.querySelector('[data-role="sample-start"]')`, 'tombol rekam sampel', 3000);
+const promptText = await ev(`document.querySelector('[data-role="voice-sample"]').innerText`);
+if (!promptText.includes('Pilih produk favoritmu')) fail(`teks bacaan sampel bukan teks cue terpilih: ${promptText.slice(0, 120)}`);
+await ev(`document.querySelector('[data-role="mic-cleanup"]').click()`);
+if (await ev(`localStorage.getItem('vk.mic.browserCleanup')`) !== '0') fail('preferensi peredam bising tidak tersimpan');
+await ev(`document.querySelector('[data-role="sample-start"]').click()`);
+await waitFor(`!!document.querySelector('[data-role="sample-stop"]')`, 'sedang merekam sampel', 10_000);
+await sleep(2000);
+await ev(`document.querySelector('[data-role="sample-stop"]').click()`);
+await waitFor(`!!document.querySelector('[data-role="sample-ready"]') && document.querySelector('[data-role="voice-try-play"]').textContent.includes('Stop')`, 'sampel siap & langsung diputar', 15_000);
+await ev(`document.querySelector('[data-role="mic-cleanup"]').click()`);
+await ev(`(()=>{const r=document.querySelector('[data-knob="warmth_db"]');const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(r,'5');r.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+await waitFor(`!!document.querySelector('[data-role="voice-custom"]')`, 'preset jadi kustom', 3000);
+await ev(`(()=>{const r=document.querySelector('[data-knob="pitch_semitones"]');const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(r,'2');r.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+await sleep(900);
+if (!(await ev(`document.querySelector('[data-knob="pitch_semitones"]').closest('label').innerText.includes('+2 semiton')`))) fail('label nada');
+if (!(await ev(`document.querySelector('[data-role="voice-try-play"]').textContent.includes('Stop')`))) fail('coba dengar berhenti setelah nada diubah');
+await ev(`(()=>{const r=document.querySelector('[data-knob="formant"]');const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(r,'0.4');r.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+await sleep(900);
+if (!(await ev(`document.querySelector('[data-knob="formant"]').closest('label').innerText.includes('tebal 40%')`))) fail('label ketebalan');
+if (!(await ev(`document.querySelector('[data-role="voice-try-play"]').textContent.includes('Stop')`))) fail('coba dengar berhenti setelah ketebalan diubah');
+const setKnob = (k, v) => ev(`(()=>{const r=document.querySelector('[data-knob="${k}"]');const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(r,'${v}');r.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+if (!(await ev(`document.querySelector('[data-knob="end_echo_delay_ms"]').disabled`))) fail('jarak pantulan harus nonaktif saat gema ujung kalimat 0');
+await setKnob('end_echo', '0.5');
+await waitFor(`!document.querySelector('[data-knob="end_echo_delay_ms"]').disabled`, 'jarak pantulan aktif', 3000);
+await setKnob('end_echo_delay_ms', '400');
+await sleep(900);
+if (!(await ev(`document.querySelector('[data-role="voice-try-play"]').textContent.includes('Stop')`))) fail('coba dengar berhenti setelah gema diubah');
+// preset akun: simpan → pakai preset bawaan → pakai lagi preset akun → ubah → perbarui
+await waitFor(`document.querySelector('[data-role="my-presets"]')?.innerText.includes('Belum ada')`, 'daftar preset akun dimuat', 5000);
+await ev(`document.querySelector('[data-role="preset-save-open"]').click()`);
+await waitFor(`!!document.querySelector('[data-role="preset-name"]')`, 'isian nama preset', 3000);
+await ev(`(()=>{const i=document.querySelector('[data-role="preset-name"]');const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(i,'Narasi E2E');i.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+await ev(`document.querySelector('[data-role="preset-save"]').click()`);
+await waitFor(`!!document.querySelector('[data-saved-preset="Narasi E2E"] [aria-pressed="true"]')`, 'preset tersimpan & aktif', 5000);
+const savedFx = [...mockApi.voicePresets.values()][0]?.fx ?? {};
+if (savedFx.end_echo !== 0.5 || savedFx.end_echo_delay_ms !== 400 || savedFx.formant !== 0.4 || 'clarity_db' in savedFx && savedFx.clarity_db === 0) fail(`isi preset di server: ${JSON.stringify(savedFx)}`);
+await ev(`document.querySelector('[data-preset="clear"]').click()`);
+await waitFor(`document.querySelector('[data-knob="end_echo"]').value === '0'`, 'preset bawaan Jernih (tanpa gema)', 3000);
+await ev(`document.querySelector('[data-saved-preset="Narasi E2E"] button').click()`);
+await waitFor(`document.querySelector('[data-knob="end_echo"]').value === '0.5' && document.querySelector('[data-knob="end_echo_delay_ms"]').value === '400'`, 'preset akun diterapkan', 3000);
+await setKnob('end_echo', '0.6');
+await waitFor(`!!document.querySelector('[data-role="preset-overwrite"]')`, 'tombol perbarui preset', 3000);
+await ev(`document.querySelector('[data-role="preset-overwrite"]').click()`);
+await waitFor(`!document.querySelector('[data-role="preset-overwrite"]')`, 'preset diperbarui', 5000);
+if ([...mockApi.voicePresets.values()][0]?.fx.end_echo !== 0.6) fail('preset di server belum diperbarui');
+await ev(`document.querySelector('[data-role="voice-try-play"]').click()`);
+await closeModal();
+await waitFor(`document.querySelector('[data-role="summary-voice"]')?.innerText.includes('Narasi E2E')`, 'ringkasan preset akun', 3000);
 
 step('pratinjau langsung: klik cue 4 → gambar + subtitle tampil; putar → waktu berjalan');
 await selectCue(4);
@@ -238,7 +328,6 @@ await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'z', code: 'KeyZ', mod
 await waitFor(`${cueCount} === 10`, 'undo sisip cue', 5000);
 
 // helper: data cue dari timeline (atribut title berisi waktu) & drag tetikus
-const cueStart = (n) => ev(`(()=>{const t=document.querySelector('[data-cue="${n}"]').title;return t.split(' · ')[1].split('–')[0];})()`);
 const dragX = async (sel, dx) => {
   await ev(`document.querySelector(${JSON.stringify(sel)}).scrollIntoView({block:'center',inline:'center'})`);
   await sleep(200);

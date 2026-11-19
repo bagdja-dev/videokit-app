@@ -1,7 +1,7 @@
 // Dokumen project tool "Video dari Subtitle" (VideoKit overview §3). Disimpan utuh sebagai satu dokumen
 // (D3: JSONB di server nanti; IndexedDB di MVP lokal). File media disimpan terpisah, dirujuk lewat mediaId.
 import type { LineStyleOverride, SlotStyle, SubtitleDesign } from '@/core/subtitle/ass';
-import type { Fit, Underflow } from '@/core/render';
+import type { Fit, Underflow, VoiceFx } from '@/core/render';
 
 export const DOCUMENT_SCHEMA_VERSION = 1;
 
@@ -68,6 +68,26 @@ export interface BackgroundVideo {
   volume: number;
 }
 
+export type BuiltinVoicePreset = 'off' | 'clear' | 'warm' | 'storyteller';
+/** `saved` = preset milik akun (tersimpan di server); `custom` = diubah manual (dari preset mana pun). */
+export type VoicePreset = BuiltinVoicePreset | 'saved' | 'custom';
+
+/** Efek suara narasi global (berlaku untuk semua audio cue; tidak untuk audio asli klip/latar). */
+export interface VoiceSettings {
+  preset: VoicePreset;
+  fx: VoiceFx;
+  /** Preset akun yang terakhir dipakai (tetap tercatat setelah slider diubah, untuk tombol "Perbarui"). */
+  savedId?: string;
+  savedName?: string;
+}
+
+export const VOICE_PRESETS: Record<BuiltinVoicePreset, { label: string; hint: string; fx: VoiceFx }> = {
+  off: { label: 'Asli', hint: 'Tanpa efek', fx: {} },
+  clear: { label: 'Jernih', hint: 'Podcast: bersih, jelas, volume rata', fx: { highpass_hz: 90, warmth_db: -1, clarity_db: 4, air_db: 2, compress: 0.5, gain_db: 2 } },
+  warm: { label: 'Hangat', hint: 'Radio: lebih berat & empuk', fx: { highpass_hz: 70, warmth_db: 4, clarity_db: 2, air_db: -1, compress: 0.6, gain_db: 2 } },
+  storyteller: { label: 'Pendongeng', hint: 'Hangat + sedikit gema ruangan', fx: { highpass_hz: 80, warmth_db: 3, clarity_db: 3, air_db: 0, compress: 0.55, gain_db: 2, reverb: 0.25 } },
+};
+
 export interface SubtitleVideoProject {
   schemaVersion: number;
   id: string;
@@ -82,6 +102,8 @@ export interface SubtitleVideoProject {
   backgroundVideo?: BackgroundVideo;
   /** Ducking latar saat audio cue / audio asli klip berbunyi. */
   duckingLevel: number;
+  /** Efek suara narasi; tidak ada = asli. */
+  voice?: VoiceSettings;
   media: Record<string, MediaRef>;
 }
 
@@ -198,6 +220,29 @@ export function shiftCuesFrom(cues: Cue[], fromCueId: string, deltaMs: number): 
   if (applied === 0) return { cues, applied: 0 };
   const moving = new Set(sorted.slice(i).map((c) => c.id));
   return { cues: cues.map((c) => (moving.has(c.id) ? { ...c, start_ms: c.start_ms + applied, end_ms: c.end_ms + applied } : c)), applied };
+}
+
+/**
+ * Panjangkan cue agar durasinya minimal `durationMs` (mis. sepanjang rekaman narasi). Bila menabrak cue berikutnya,
+ * cue sesudahnya ikut bergeser (ripple) sebesar kekurangannya. Tidak pernah memendekkan cue.
+ */
+export function fitCueToDuration(cues: Cue[], cueId: string, durationMs: number): { cues: Cue[]; changed: boolean } {
+  const sorted = sortCues(cues);
+  const i = sorted.findIndex((c) => c.id === cueId);
+  const cue = sorted[i];
+  if (!cue) return { cues, changed: false };
+  const end = cue.start_ms + Math.round(durationMs);
+  if (end <= cue.end_ms) return { cues, changed: false };
+  const next = sorted[i + 1];
+  const push = next ? Math.max(0, end - next.start_ms) : 0;
+  const moving = new Set(sorted.slice(i + 1).map((c) => c.id));
+  return {
+    cues: cues.map((c) => {
+      if (c.id === cueId) return { ...c, end_ms: end };
+      return push && moving.has(c.id) ? { ...c, start_ms: c.start_ms + push, end_ms: c.end_ms + push } : c;
+    }),
+    changed: true,
+  };
 }
 
 /**

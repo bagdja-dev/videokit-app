@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildAss } from '@/core/subtitle/ass';
-import { clampCueTiming, createProject, insertCueAt, insertCueRipple, MIN_CUE_MS, NEW_CUE_MS, shiftAllCues, shiftCuesFrom, type Cue } from '../model';
+import { encodeWav, mixToMono } from '@/core/audio/wav';
+import { clampCueTiming, createProject, fitCueToDuration, insertCueAt, insertCueRipple, MIN_CUE_MS, NEW_CUE_MS, shiftAllCues, shiftCuesFrom, type Cue } from '../model';
 
 const cue = (id: string, start: number, end: number, extra: Partial<Cue> = {}): Cue => ({ id, start_ms: start, end_ms: end, lines: [id], ...extra });
 const cues = [cue('a', 0, 2000), cue('b', 3000, 5000), cue('c', 5000, 8000)];
@@ -108,5 +109,40 @@ describe('ripple: insertCueRipple & shiftCuesFrom', () => {
     const r = shiftCuesFrom(cues, 'b', -5000);
     expect(r.applied).toBe(-1000);
     expect(r.cues.find((c) => c.id === 'b')!.start_ms).toBe(2000);
+  });
+});
+
+describe('fitCueToDuration', () => {
+  const mk = (id: string, s: number, e: number): Cue => ({ id, start_ms: s, end_ms: e, lines: [''] });
+  it('memanjangkan cue di celah tanpa menggeser yang lain', () => {
+    const r = fitCueToDuration([mk('a', 0, 1000), mk('b', 5000, 6000)], 'a', 3000);
+    expect(r.changed).toBe(true);
+    expect(r.cues.find((c) => c.id === 'a')).toMatchObject({ start_ms: 0, end_ms: 3000 });
+    expect(r.cues.find((c) => c.id === 'b')).toMatchObject({ start_ms: 5000, end_ms: 6000 });
+  });
+  it('menggeser cue sesudahnya sebesar kekurangannya', () => {
+    const r = fitCueToDuration([mk('a', 0, 1000), mk('b', 1500, 2500), mk('c', 3000, 4000)], 'a', 2000);
+    expect(r.cues.map((c) => [c.start_ms, c.end_ms])).toEqual([[0, 2000], [2000, 3000], [3500, 4500]]);
+  });
+  it('tidak memendekkan cue', () => {
+    const cues = [mk('a', 0, 4000)];
+    expect(fitCueToDuration(cues, 'a', 1000)).toEqual({ cues, changed: false });
+  });
+});
+
+describe('encodeWav', () => {
+  it('header RIFF PCM16 mono & sampel terklip', () => {
+    const buf = encodeWav(new Float32Array([0, 1, -1, 2]), 48000);
+    const v = new DataView(buf);
+    const str = (o: number) => String.fromCharCode(...new Uint8Array(buf, o, 4));
+    expect(buf.byteLength).toBe(44 + 8);
+    expect([str(0), str(8), str(12), str(36)]).toEqual(['RIFF', 'WAVE', 'fmt ', 'data']);
+    expect(v.getUint16(22, true)).toBe(1);
+    expect(v.getUint32(24, true)).toBe(48000);
+    expect(v.getUint16(34, true)).toBe(16);
+    expect([1, 2, 3].map((i) => v.getInt16(44 + i * 2, true))).toEqual([32767, -32768, 32767]);
+  });
+  it('mixToMono merata-rata kanal', () => {
+    expect(Array.from(mixToMono([new Float32Array([1, 0]), new Float32Array([0, 1])]))).toEqual([0.5, 0.5]);
   });
 });
